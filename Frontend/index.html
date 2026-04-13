@@ -12,7 +12,7 @@
 <!-- ── SKIP LINK (accesibilidad teclado) ── -->
 <a href="#main-content" class="skip-link">Saltar al contenido principal</a>
 
-<!-- ── TOAST (aria-live para lectores de pantalla) ── -->
+<!-- ── TOAST (aria-live región para lectores de pantalla) ── -->
 <div
   class="toast"
   id="toast"
@@ -28,7 +28,7 @@
   </div>
 </div>
 
-<!-- ── LOADING OVERLAY ── -->
+<!-- ── LOADING OVERLAY (role=status + assertive para cambios urgentes) ── -->
 <div
   class="loading-overlay"
   id="loader"
@@ -40,30 +40,37 @@
   <p class="loader-text" id="loader-text">Iniciando PriceVision…</p>
 </div>
 
+
 <!-- ════════════════════════════════════════
      LANDING
+     Usa <main> para el contenido principal
+     <header> para la marca, <section> para
+     las distintas áreas, <aside> para el auth
 ════════════════════════════════════════ -->
-<div class="screen active" id="landing" aria-label="Página de inicio">
+<div class="screen active" id="landing">
+
+  <!-- Skip destino de teclado dentro de landing -->
   <div class="landing-grid">
 
     <!-- LEFT: marca + hero + descripción + chips -->
-    <section class="landing-left" aria-label="Presentación del producto">
+    <section class="landing-left" aria-labelledby="landing-heading">
 
-      <!-- Marca -->
+      <!-- Marca: header semántico dentro de section -->
       <header class="landing-brand">
+        <!-- role="img" + aria-label en el logo-text para que los lectores lo anuncien como imagen de marca -->
         <div class="logo-text" role="img" aria-label="PriceVision logo">PriceVision</div>
         <p class="tagline">Sistema de búsqueda visual y comparación de precios</p>
       </header>
 
-      <!-- Hero image -->
+      <!-- Hero image: <figure> + <figcaption> semántico -->
       <figure class="landing-hero">
         <img
           src="hero.png"
           alt="Pantalla de PriceVision mostrando comparación de precios entre Amazon $179, Mercado Libre $185, Linio $199 y Costco $215 para un smartwatch"
         />
-        <!-- hero-card oculta por diseño -->
+        <!-- aria-hidden porque es decorativo/duplicado del alt -->
         <div class="hero-card" aria-hidden="true">
-          <ul class="hero-price-list" aria-label="Comparación de precios">
+          <ul class="hero-price-list">
             <li class="hero-price"><strong>$179</strong><span>Amazon</span></li>
             <li class="hero-price"><strong>$185</strong><span>Mercado</span></li>
             <li class="hero-price"><strong>$199</strong><span>Linio</span></li>
@@ -72,17 +79,19 @@
         </div>
       </figure>
 
-      <!-- Descripción -->
+      <!-- Heading oculto visualmente pero presente para lectores -->
+      <h1 id="landing-heading" class="sr-only">PriceVision — Comparador de precios</h1>
+
       <p class="landing-desc">
         ¡Encuentra los mejores precios al instante! Toma una foto de cualquier producto y
         descubre dónde comprarlo más barato.
       </p>
 
-      <!-- Feature chips -->
-      <ul class="feature-chips" aria-label="Características principales">
+      <!-- Feature chips: <ul> con <li> semánticos -->
+      <ul class="feature-chips" aria-label="Características principales de PriceVision">
         <li class="chip">
           <div class="chip-icon-wrap chip-icon-blue" aria-hidden="true">
-            <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="3"/><line x1="12" y1="2" x2="12" y2="5"/><line x1="12" y1="19" x2="12" y2="22"/><line x1="2" y1="12" x2="5" y2="12"/><line x1="19" y1="12" x2="22" y2="12"/></svg>
+            <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" focusable="false"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="3"/><line x1="12" y1="2" x2="12" y2="5"/><line x1="12" y1="19" x2="12" y2="22"/><line x1="2" y1="12" x2="5" y2="12"/><line x1="19" y1="12" x2="22" y2="12"/></svg>
           </div>
           <div class="chip-text">
             <strong>Escanea productos</strong>
@@ -91,7 +100,7 @@
         </li>
         <li class="chip">
           <div class="chip-icon-wrap chip-icon-purple" aria-hidden="true">
-            <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><circle cx="9" cy="21" r="1"/><circle cx="20" cy="21" r="1"/><path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"/></svg>
+            <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" focusable="false"><circle cx="9" cy="21" r="1"/><circle cx="20" cy="21" r="1"/><path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"/></svg>
           </div>
           <div class="chip-text">
             <strong>Compara precios</strong>
@@ -100,7 +109,7 @@
         </li>
         <li class="chip">
           <div class="chip-icon-wrap chip-icon-green" aria-hidden="true">
-            <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><polyline points="20 12 20 22 4 22 4 12"/><rect x="2" y="7" width="20" height="5"/><line x1="12" y1="22" x2="12" y2="7"/><path d="M12 7H7.5a2.5 2.5 0 0 1 0-5C11 2 12 7 12 7z"/><path d="M12 7h4.5a2.5 2.5 0 0 0 0-5C13 2 12 7 12 7z"/></svg>
+            <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" focusable="false"><polyline points="20 12 20 22 4 22 4 12"/><rect x="2" y="7" width="20" height="5"/><line x1="12" y1="22" x2="12" y2="7"/><path d="M12 7H7.5a2.5 2.5 0 0 1 0-5C11 2 12 7 12 7z"/><path d="M12 7h4.5a2.5 2.5 0 0 0 0-5C13 2 12 7 12 7z"/></svg>
           </div>
           <div class="chip-text">
             <strong>Mejores ofertas</strong>
@@ -109,7 +118,7 @@
         </li>
         <li class="chip">
           <div class="chip-icon-wrap chip-icon-red" aria-hidden="true">
-            <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+            <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" focusable="false"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
           </div>
           <div class="chip-text">
             <strong>Resultados rápidos</strong>
@@ -119,11 +128,13 @@
       </ul>
     </section>
 
-    <!-- RIGHT: Auth -->
+    <!-- RIGHT: Auth como <aside> semántico -->
     <aside class="landing-right" aria-label="Acceso a la plataforma">
       <article class="auth-card">
-        <h1>¿Estás listo para comenzar tu búsqueda?</h1>
+        <!-- h2 porque h1 ya está en la section izquierda -->
+        <h2>¿Estás listo para comenzar tu búsqueda?</h2>
         <p>Accede a tu cuenta o regístrate para comenzar</p>
+        <!-- role="group" + aria-label para el grupo de botones -->
         <div class="btn-group" role="group" aria-label="Opciones de acceso">
           <button class="btn btn-accent" onclick="goLogin('user')">
             Iniciar Sesión como usuario
@@ -144,51 +155,76 @@
 
 <!-- ════════════════════════════════════════
      LOGIN
+     <main> con <section> y <form> semántico
 ════════════════════════════════════════ -->
-<div class="screen" id="login" aria-label="Inicio de sesión">
+<div class="screen" id="login" aria-label="Pantalla de inicio de sesión">
   <div class="login-wrap">
-    <div class="login-logo" aria-label="PriceVision">PriceVision</div>
+    <div class="login-logo" role="img" aria-label="PriceVision">PriceVision</div>
     <p class="login-tagline">Sistema de búsqueda visual y comparación de precios</p>
 
-    <section class="login-card" aria-label="Formulario de inicio de sesión">
-      <h2 id="login-greeting">Hola de nuevo</h2>
+    <!-- <section> + <form> para semántica y accesibilidad -->
+    <section class="login-card" aria-labelledby="login-heading">
+      <h1 id="login-heading" id="login-greeting">Hola de nuevo</h1>
 
-      <div class="field">
-        <label for="email-input">Correo electrónico</label>
-        <input
-          type="email"
-          id="email-input"
-          name="email"
-          placeholder="usuario@empresa.com"
-          autocomplete="email"
-          required
-          aria-required="true"
-          aria-describedby="email-hint"
+      <!-- novalidate para usar validación custom con ARIA -->
+      <form id="login-form" novalidate onsubmit="handleLoginSubmit(event)">
+        <div class="field">
+          <label for="email-input">Correo electrónico</label>
+          <input
+            type="email"
+            id="email-input"
+            name="email"
+            placeholder="usuario@empresa.com"
+            autocomplete="email"
+            required
+            aria-required="true"
+            aria-describedby="email-hint"
+            aria-invalid="false"
+          >
+          <span id="email-hint" class="form-note">Ingresa tu correo electrónico</span>
+          <!-- Zona de error accesible -->
+          <span id="email-error" class="field-error" role="alert" aria-live="polite" hidden></span>
+        </div>
+
+        <div class="field">
+          <label for="pass-input">Contraseña</label>
+          <!-- Wrapper para input + botón mostrar/ocultar -->
+          <div class="input-with-action">
+            <input
+              type="password"
+              id="pass-input"
+              name="password"
+              placeholder="Digite su contraseña"
+              autocomplete="current-password"
+              required
+              aria-required="true"
+              aria-describedby="pass-toggle-hint"
+              aria-invalid="false"
+            >
+            <!-- Widget: toggle mostrar contraseña -->
+            <button
+              type="button"
+              class="toggle-password"
+              id="toggle-pass"
+              aria-label="Mostrar contraseña"
+              aria-pressed="false"
+              onclick="togglePasswordVisibility('pass-input','toggle-pass')"
+            >
+              <svg id="eye-icon-pass" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" focusable="false"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+            </button>
+          </div>
+          <span id="pass-toggle-hint" class="sr-only">Usa el botón para mostrar u ocultar la contraseña</span>
+          <span id="pass-error" class="field-error" role="alert" aria-live="polite" hidden></span>
+        </div>
+
+        <button
+          type="submit"
+          class="btn btn-accent"
+          style="width:100%;margin-top:8px"
         >
-        <span id="email-hint" class="sr-only">Ingresa tu correo electrónico corporativo</span>
-      </div>
-
-      <div class="field">
-        <label for="pass-input">Contraseña</label>
-        <input
-          type="password"
-          id="pass-input"
-          name="password"
-          placeholder="Digite su contraseña"
-          autocomplete="current-password"
-          required
-          aria-required="true"
-        >
-      </div>
-
-      <button
-        class="btn btn-accent"
-        style="width:100%;margin-top:8px"
-        onclick="doLogin()"
-        aria-label="Iniciar sesión en PriceVision"
-      >
-        Iniciar Sesión
-      </button>
+          Iniciar Sesión
+        </button>
+      </form>
     </section>
 
     <footer class="login-footer">
@@ -202,57 +238,109 @@
 <!-- ════════════════════════════════════════
      REGISTER
 ════════════════════════════════════════ -->
-<div class="screen" id="register" aria-label="Registro de cuenta">
+<div class="screen" id="register" aria-label="Pantalla de registro de cuenta">
   <div class="login-wrap" style="max-width:460px;overflow-y:auto;max-height:100vh;padding:30px 40px">
 
     <button class="back-link" onclick="showScreen('landing')" aria-label="Volver a la página de inicio">
-      <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><polyline points="15 18 9 12 15 6"/></svg>
+      <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" focusable="false"><polyline points="15 18 9 12 15 6"/></svg>
       Volver al inicio
     </button>
 
-    <div class="login-logo" aria-label="PriceVision">PriceVision</div>
+    <div class="login-logo" role="img" aria-label="PriceVision">PriceVision</div>
     <p class="login-tagline">Crea tu cuenta y empieza a ahorrar</p>
 
-    <section class="login-card" aria-label="Formulario de registro">
-      <h2>Crear cuenta</h2>
+    <section class="login-card" aria-labelledby="register-heading">
+      <h1 id="register-heading">Crear cuenta</h1>
 
-      <div class="field">
-        <label for="reg-name">Nombre completo</label>
-        <input type="text" id="reg-name" name="fullname" placeholder="Tu nombre completo" autocomplete="name" required aria-required="true">
-      </div>
-      <div class="field">
-        <label for="reg-email">Correo electrónico</label>
-        <input type="email" id="reg-email" name="email" placeholder="tu@correo.com" autocomplete="email" required aria-required="true">
-      </div>
-      <div class="field">
-        <label for="reg-org">Organización</label>
-        <input type="text" id="reg-org" name="organization" placeholder="Nombre de tu empresa" autocomplete="organization" required aria-required="true">
-      </div>
-      <div class="field">
-        <label for="reg-role">Rol</label>
-        <select id="reg-role" name="role" required aria-required="true">
-          <option value="">Selecciona tu rol</option>
-          <option value="Analista">Analista</option>
-          <option value="Comprador">Comprador</option>
-          <option value="Gerente">Gerente</option>
-          <option value="Otro">Otro</option>
-        </select>
-      </div>
-      <div class="field">
-        <label for="reg-pass">Contraseña</label>
-        <input type="password" id="reg-pass" name="password" placeholder="Mínimo 8 caracteres" autocomplete="new-password" required aria-required="true" aria-describedby="pass-req">
-        <span id="pass-req" class="form-note">Mínimo 8 caracteres</span>
-      </div>
-      <div class="field">
-        <label for="reg-pass2">Confirmar contraseña</label>
-        <input type="password" id="reg-pass2" name="confirm-password" placeholder="Repite tu contraseña" autocomplete="new-password" required aria-required="true">
-      </div>
+      <form id="register-form" novalidate onsubmit="handleRegisterSubmit(event)">
+        <div class="field">
+          <label for="reg-name">Nombre completo <span class="required-mark" aria-hidden="true">*</span></label>
+          <input type="text" id="reg-name" name="fullname" placeholder="Tu nombre completo" autocomplete="name" required aria-required="true" aria-invalid="false">
+          <span id="reg-name-error" class="field-error" role="alert" aria-live="polite" hidden></span>
+        </div>
+        <div class="field">
+          <label for="reg-email">Correo electrónico <span class="required-mark" aria-hidden="true">*</span></label>
+          <input type="email" id="reg-email" name="email" placeholder="tu@correo.com" autocomplete="email" required aria-required="true" aria-invalid="false">
+          <span id="reg-email-error" class="field-error" role="alert" aria-live="polite" hidden></span>
+        </div>
+        <div class="field">
+          <label for="reg-org">Organización <span class="required-mark" aria-hidden="true">*</span></label>
+          <input type="text" id="reg-org" name="organization" placeholder="Nombre de tu empresa" autocomplete="organization" required aria-required="true" aria-invalid="false">
+          <span id="reg-org-error" class="field-error" role="alert" aria-live="polite" hidden></span>
+        </div>
+        <div class="field">
+          <label for="reg-role">Rol <span class="required-mark" aria-hidden="true">*</span></label>
+          <select id="reg-role" name="role" required aria-required="true" aria-invalid="false">
+            <option value="">Selecciona tu rol</option>
+            <option value="Analista">Analista</option>
+            <option value="Comprador">Comprador</option>
+            <option value="Gerente">Gerente</option>
+            <option value="Otro">Otro</option>
+          </select>
+          <span id="reg-role-error" class="field-error" role="alert" aria-live="polite" hidden></span>
+        </div>
+        <div class="field">
+          <label for="reg-pass">Contraseña <span class="required-mark" aria-hidden="true">*</span></label>
+          <div class="input-with-action">
+            <input
+              type="password"
+              id="reg-pass"
+              name="password"
+              placeholder="Mínimo 8 caracteres"
+              autocomplete="new-password"
+              required
+              aria-required="true"
+              aria-describedby="pass-req reg-pass-toggle-hint"
+              aria-invalid="false"
+            >
+            <button
+              type="button"
+              class="toggle-password"
+              id="toggle-reg-pass"
+              aria-label="Mostrar contraseña"
+              aria-pressed="false"
+              onclick="togglePasswordVisibility('reg-pass','toggle-reg-pass')"
+            >
+              <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" focusable="false"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+            </button>
+          </div>
+          <span id="pass-req" class="form-note">Mínimo 8 caracteres</span>
+          <span id="reg-pass-toggle-hint" class="sr-only">Usa el botón para mostrar u ocultar la contraseña</span>
+          <span id="reg-pass-error" class="field-error" role="alert" aria-live="polite" hidden></span>
+        </div>
+        <div class="field">
+          <label for="reg-pass2">Confirmar contraseña <span class="required-mark" aria-hidden="true">*</span></label>
+          <div class="input-with-action">
+            <input
+              type="password"
+              id="reg-pass2"
+              name="confirm-password"
+              placeholder="Repite tu contraseña"
+              autocomplete="new-password"
+              required
+              aria-required="true"
+              aria-invalid="false"
+            >
+            <button
+              type="button"
+              class="toggle-password"
+              id="toggle-reg-pass2"
+              aria-label="Mostrar confirmación de contraseña"
+              aria-pressed="false"
+              onclick="togglePasswordVisibility('reg-pass2','toggle-reg-pass2')"
+            >
+              <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" focusable="false"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+            </button>
+          </div>
+          <span id="reg-pass2-error" class="field-error" role="alert" aria-live="polite" hidden></span>
+        </div>
 
-      <button class="btn btn-accent" style="width:100%;margin-top:8px" onclick="doRegister()">
-        Crear Cuenta
-      </button>
+        <button type="submit" class="btn btn-accent" style="width:100%;margin-top:8px">
+          Crear Cuenta
+        </button>
+      </form>
 
-      <div class="divider" role="separator"><span>o</span></div>
+      <div class="divider" role="separator" aria-label="o"><span>o</span></div>
 
       <button class="btn btn-outline" style="width:100%" onclick="goLogin('user')">
         Ya tengo cuenta · Iniciar Sesión
@@ -260,7 +348,7 @@
     </section>
 
     <footer class="login-footer">
-      <p>2026 PriceVision · Al registrarte aceptas los <span>Términos de uso</span></p>
+      <p>2026 PriceVision · Al registrarte aceptas los <span tabindex="0" role="link">Términos de uso</span></p>
     </footer>
   </div>
 </div><!-- /register -->
@@ -268,93 +356,108 @@
 
 <!-- ════════════════════════════════════════
      USER APP
+     <nav> sidebar + <main> contenido
 ════════════════════════════════════════ -->
 <div class="screen" id="app">
 
-  <!-- Sidebar nav -->
-  <nav class="sidebar" role="navigation" aria-label="Navegación principal">
-    <div class="sidebar-logo" aria-label="PriceVision">PriceVision</div>
+  <!-- Sidebar: <nav> semántico con aria-label único -->
+  <nav class="sidebar" aria-label="Navegación principal de PriceVision">
+    <div class="sidebar-logo" role="img" aria-label="PriceVision">PriceVision</div>
 
+    <!-- role="list" explícito para VoiceOver que reset list-style -->
     <ul class="nav-list" role="list">
-      <li>
-        <button class="nav-item active" id="nav-dashboard" onclick="showPage('dashboard')" aria-current="page" aria-label="Ir al Dashboard">
-          <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
+      <li role="listitem">
+        <button
+          class="nav-item active"
+          id="nav-dashboard"
+          onclick="showPage('dashboard')"
+          aria-current="page"
+        >
+          <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" focusable="false" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
           <span>Dashboard</span>
         </button>
       </li>
-      <li>
-        <button class="nav-item" id="nav-visual" onclick="showPage('visual')" aria-label="Ir a Búsqueda Visual">
-          <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+      <li role="listitem">
+        <button class="nav-item" id="nav-visual" onclick="showPage('visual')">
+          <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" focusable="false" aria-hidden="true"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
           <span>Búsqueda Visual</span>
         </button>
       </li>
-      <li>
-        <button class="nav-item" id="nav-results" onclick="navToResults()" aria-label="Ver Resultados">
-          <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M12 20V10M6 20V4M18 20v-4"/></svg>
+      <li role="listitem">
+        <button class="nav-item" id="nav-results" onclick="navToResults()">
+          <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" focusable="false" aria-hidden="true"><path d="M12 20V10M6 20V4M18 20v-4"/></svg>
           <span>Resultados</span>
         </button>
       </li>
-      <li>
-        <button class="nav-item" id="nav-profile" onclick="showPage('profile')" aria-label="Ver Perfil">
-          <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg>
+      <li role="listitem">
+        <button class="nav-item" id="nav-profile" onclick="showPage('profile')">
+          <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" focusable="false" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg>
           <span>Perfil</span>
         </button>
       </li>
     </ul>
 
     <div class="sidebar-bottom">
-      <button class="nav-item admin-nav" id="admin-btn" onclick="goAdminLogin()" aria-label="Cambiar a Modo Administrador">
-        <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+      <button
+        class="nav-item admin-nav"
+        id="admin-btn"
+        onclick="goAdminLogin()"
+        aria-label="Cambiar a modo administrador"
+      >
+        <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" focusable="false" aria-hidden="true"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
         <span>Modo Admin</span>
       </button>
-      <button class="nav-item" onclick="logout()" aria-label="Cerrar sesión">
-        <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+      <button class="nav-item" onclick="logout()">
+        <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" focusable="false" aria-hidden="true"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
         <span>Cerrar Sesión</span>
       </button>
     </div>
   </nav>
 
-  <!-- Main content -->
-  <main class="main" id="main-content" role="main" tabindex="-1">
+  <!-- Main content: tabindex="-1" para que el skip link pueda enviar foco aquí -->
+  <main class="main" id="main-content" tabindex="-1">
 
     <!-- ── DASHBOARD ── -->
-    <section class="page active" id="page-dashboard" aria-label="Dashboard">
+    <section class="page active" id="page-dashboard" aria-labelledby="dashboard-title">
       <header class="page-header">
         <div>
-          <h1 class="page-title">Dashboard</h1>
+          <h1 class="page-title" id="dashboard-title">Dashboard</h1>
           <p class="page-sub">Resumen de actividad y métricas clave</p>
         </div>
-        <button class="btn-sm" onclick="showPage('visual')" aria-label="Iniciar nueva búsqueda visual">
+        <button class="btn-sm" onclick="showPage('visual')">
           + Nueva Búsqueda
         </button>
       </header>
 
-      <div class="stats-grid" role="list" aria-label="Métricas clave">
-        <article class="stat-card stagger-1" role="listitem">
+      <!-- Métricas: role="list" + role="listitem" para que los lectores las anuncien como lista -->
+      <ul class="stats-grid" role="list" aria-label="Métricas clave de actividad">
+        <li class="stat-card stagger-1" role="listitem">
           <div class="stat-label">Productos analizados</div>
-          <div class="stat-val" id="cnt-products" aria-live="polite">0</div>
-          <span class="stat-tag tag-green" aria-label="Incremento del 12%">↑ +12%</span>
-        </article>
-        <article class="stat-card stagger-2" role="listitem">
+          <!-- aria-live para que se anuncie cuando el contador animado cambie -->
+          <div class="stat-val" id="cnt-products" aria-live="polite" aria-atomic="true">0</div>
+          <span class="stat-tag tag-green">↑ +12%</span>
+        </li>
+        <li class="stat-card stagger-2" role="listitem">
           <div class="stat-label">Tiendas monitoreadas</div>
-          <div class="stat-val" id="cnt-stores" aria-live="polite">0</div>
+          <div class="stat-val" id="cnt-stores" aria-live="polite" aria-atomic="true">0</div>
           <span class="stat-tag tag-muted">+0%</span>
-        </article>
-        <article class="stat-card stagger-3" role="listitem">
+        </li>
+        <li class="stat-card stagger-3" role="listitem">
           <div class="stat-label">Variación promedio</div>
           <div class="stat-val">+8.3%</div>
           <span class="stat-tag tag-green">Favorable</span>
-        </article>
-        <article class="stat-card stagger-4" role="listitem">
+        </li>
+        <li class="stat-card stagger-4" role="listitem">
           <div class="stat-label">Oportunidades detectadas</div>
-          <div class="stat-val" id="cnt-ops" aria-live="polite">0</div>
+          <div class="stat-val" id="cnt-ops" aria-live="polite" aria-atomic="true">0</div>
           <span class="stat-tag tag-blue">+5 nuevas</span>
-        </article>
-      </div>
+        </li>
+      </ul>
 
       <h2 class="section-title">Búsquedas recientes</h2>
-      <div class="table-wrap">
-        <table aria-label="Historial de búsquedas recientes">
+      <div class="table-wrap" role="region" aria-label="Historial de búsquedas recientes">
+        <table>
+          <caption class="sr-only">Historial de las últimas búsquedas realizadas</caption>
           <thead>
             <tr>
               <th scope="col">Producto</th>
@@ -367,38 +470,38 @@
           <tbody>
             <tr>
               <td>Zapatillas deportivas Nike Air Max</td>
-              <td><time datetime="2026-02-25T10:30">2026-02-25 10:30</time></td>
+              <td><time datetime="2026-02-25T10:30">25/02/2026 10:30</time></td>
               <td class="price-val">$79.990</td>
               <td>5 tiendas</td>
-              <td><button class="link-btn" onclick="goResults('Nike Air Max')" aria-label="Ver detalles de Nike Air Max">Ver Detalles</button></td>
+              <td><button class="link-btn" onclick="goResults('Nike Air Max')">Ver Detalles</button></td>
             </tr>
             <tr>
               <td>Auriculares inalámbricos Sony</td>
-              <td><time datetime="2026-02-24T15:45">2026-02-24 15:45</time></td>
+              <td><time datetime="2026-02-24T15:45">24/02/2026 15:45</time></td>
               <td class="price-val">$189.990</td>
               <td>4 tiendas</td>
-              <td><button class="link-btn" onclick="goResults('Auriculares Sony', 'sony')" aria-label="Ver detalles de Auriculares Sony">Ver Detalles</button></td>
+              <td><button class="link-btn" onclick="goResults('Auriculares Sony', 'sony')">Ver Detalles</button></td>
             </tr>
             <tr>
               <td>Mochila portátil impermeable</td>
-              <td><time datetime="2026-02-23T09:20">2026-02-23 09:20</time></td>
+              <td><time datetime="2026-02-23T09:20">23/02/2026 09:20</time></td>
               <td class="price-val">$34.990</td>
               <td>6 tiendas</td>
-              <td><button class="link-btn" onclick="goResults('Mochila', 'mochila')" aria-label="Ver detalles de Mochila">Ver Detalles</button></td>
+              <td><button class="link-btn" onclick="goResults('Mochila', 'mochila')">Ver Detalles</button></td>
             </tr>
             <tr>
               <td>Smartwatch Samsung Galaxy</td>
-              <td><time datetime="2026-02-22T14:10">2026-02-22 14:10</time></td>
+              <td><time datetime="2026-02-22T14:10">22/02/2026 14:10</time></td>
               <td class="price-val">$149.990</td>
               <td>5 tiendas</td>
-              <td><button class="link-btn" onclick="goResults('Smartwatch Samsung', 'samsung')" aria-label="Ver detalles de Smartwatch Samsung">Ver Detalles</button></td>
+              <td><button class="link-btn" onclick="goResults('Smartwatch Samsung', 'samsung')">Ver Detalles</button></td>
             </tr>
             <tr>
               <td>Cafetera automática Nespresso</td>
-              <td><time datetime="2026-02-21T11:05">2026-02-21 11:05</time></td>
+              <td><time datetime="2026-02-21T11:05">21/02/2026 11:05</time></td>
               <td class="price-val">$89.990</td>
               <td>3 tiendas</td>
-              <td><button class="link-btn" onclick="goResults('Nespresso', 'nespresso')" aria-label="Ver detalles de Nespresso">Ver Detalles</button></td>
+              <td><button class="link-btn" onclick="goResults('Nespresso', 'nespresso')">Ver Detalles</button></td>
             </tr>
           </tbody>
         </table>
@@ -406,33 +509,36 @@
     </section>
 
     <!-- ── VISUAL SEARCH ── -->
-    <section class="page" id="page-visual" aria-label="Búsqueda visual de productos">
+    <section class="page" id="page-visual" aria-labelledby="visual-title">
       <header class="page-header">
         <div>
-          <h1 class="page-title">Búsqueda visual</h1>
+          <h1 class="page-title" id="visual-title">Búsqueda visual</h1>
           <p class="page-sub">Carga una imagen del producto para analizar y comparar precios</p>
         </div>
       </header>
 
       <div id="upload-state">
+        <!-- Drop zone: role="button" + tabindex + onkeydown para teclado -->
         <div
           class="upload-zone"
           id="drop-zone"
           role="button"
           tabindex="0"
-          aria-label="Zona de carga de imagen. Haz clic o arrastra una imagen aquí"
+          aria-label="Zona de carga de imagen. Presiona Enter o Espacio para seleccionar, o arrastra una imagen aquí"
+          aria-haspopup="dialog"
           onclick="document.getElementById('file-input').click()"
-          onkeydown="if(event.key==='Enter'||event.key===' ')document.getElementById('file-input').click()"
+          onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();document.getElementById('file-input').click()}"
           ondragover="handleDrag(event,true)"
           ondragleave="handleDrag(event,false)"
           ondrop="handleDrop(event)"
         >
           <div class="upload-icon" aria-hidden="true">
-            <svg fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+            <svg fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24" focusable="false"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
           </div>
           <p class="upload-title">Arrastra una imagen aquí</p>
           <p class="upload-sub">o haz clic para seleccionar un archivo</p>
           <p class="upload-hint">PNG, JPG, WEBP hasta 15MB</p>
+          <!-- Input oculto: aria-label para cuando reciba foco de forma no esperada -->
           <input
             type="file"
             id="file-input"
@@ -440,33 +546,50 @@
             accept="image/*"
             style="display:none"
             onchange="handleFile(event)"
-            aria-label="Seleccionar imagen del producto"
+            aria-label="Seleccionar imagen del producto (PNG, JPG, WEBP, máximo 15MB)"
           >
         </div>
       </div>
 
       <div id="preview-state" style="display:none">
-        <figure class="preview-img-wrap scan-wrap scan-corners" aria-label="Vista previa del producto cargado">
+        <!-- figure + figcaption semántico -->
+        <figure class="preview-img-wrap scan-wrap scan-corners" aria-label="Vista previa del producto cargado para análisis">
           <div class="scan-line" aria-hidden="true"></div>
           <img id="preview-img" src="" alt="Producto cargado para análisis de precios">
-          <button class="btn-ghost" onclick="resetUpload()" aria-label="Cambiar la imagen del producto">
+          <figcaption class="sr-only">Imagen del producto lista para analizar</figcaption>
+          <button class="btn-ghost" onclick="resetUpload()" aria-label="Cambiar la imagen del producto cargada">
             Cambiar imagen
           </button>
         </figure>
 
-        <article class="attrs-card stagger-1" aria-label="Atributos reconocidos del producto">
+        <!-- Widget: tarjeta de atributos con dl semántico -->
+        <article class="attrs-card stagger-1" aria-label="Atributos reconocidos del producto por IA">
           <h2 class="attrs-title">
-            <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M9 3H5a2 2 0 0 0-2 2v4"/><path d="M15 3h4a2 2 0 0 1 2 2v4"/><path d="M9 21H5a2 2 0 0 1-2-2v-4"/><path d="M15 21h4a2 2 0 0 0 2-2v-4"/></svg>
+            <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" focusable="false" aria-hidden="true"><path d="M9 3H5a2 2 0 0 0-2 2v4"/><path d="M15 3h4a2 2 0 0 1 2 2v4"/><path d="M9 21H5a2 2 0 0 1-2-2v-4"/><path d="M15 21h4a2 2 0 0 0 2-2v-4"/></svg>
             Atributos reconocidos
           </h2>
+          <!-- dl semántico para pares término-definición -->
           <dl class="attrs-grid">
-            <div class="attr-item"><dt>Categoría</dt><dd>Calzado deportivo</dd></div>
-            <div class="attr-item"><dt>Color</dt><dd>Negro/Blanco</dd></div>
-            <div class="attr-item"><dt>Marca aproximada</dt><dd>Nike (aproximado)</dd></div>
-            <div class="attr-item"><dt>Estilo</dt><dd>Casual deportivo</dd></div>
+            <div class="attr-item">
+              <dt>Categoría</dt>
+              <dd>Calzado deportivo</dd>
+            </div>
+            <div class="attr-item">
+              <dt>Color</dt>
+              <dd>Negro/Blanco</dd>
+            </div>
+            <div class="attr-item">
+              <dt>Marca aproximada</dt>
+              <dd>Nike (aproximado)</dd>
+            </div>
+            <div class="attr-item">
+              <dt>Estilo</dt>
+              <dd>Casual deportivo</dd>
+            </div>
           </dl>
           <h3 class="attrs-title" style="margin-bottom:10px">Palabras clave generadas</h3>
-          <ul class="kw-list" aria-label="Palabras clave del producto">
+          <!-- ul semántico para lista de keywords -->
+          <ul class="kw-list" aria-label="Palabras clave generadas para la búsqueda">
             <li class="kw">zapatillas deportivas</li>
             <li class="kw">running</li>
             <li class="kw">casual</li>
@@ -481,7 +604,7 @@
           class="btn btn-accent"
           style="width:100%;padding:14px"
           onclick="analyzePrice()"
-          aria-label="Analizar precios del producto en múltiples tiendas"
+          aria-label="Analizar precios del producto cargado en múltiples tiendas"
         >
           Analizar Precios
         </button>
@@ -489,16 +612,18 @@
     </section>
 
     <!-- ── RESULTS ── -->
-    <section class="page" id="page-results" aria-label="Resultados de comparación de precios">
+    <section class="page" id="page-results" aria-labelledby="results-title">
       <header class="page-header">
         <div>
-          <h1 class="page-title">Resultados de búsqueda</h1>
-          <p class="page-sub" id="results-sub" aria-live="polite">Comparación de precios</p>
+          <h1 class="page-title" id="results-title">Resultados de búsqueda</h1>
+          <!-- aria-live para anunciar qué producto se está comparando -->
+          <p class="page-sub" id="results-sub" aria-live="polite" aria-atomic="true">Comparación de precios</p>
         </div>
       </header>
 
-      <fieldset class="filters-bar" aria-label="Filtros de búsqueda">
-        <legend class="sr-only">Filtrar y ordenar resultados</legend>
+      <!-- <fieldset> + <legend> para grupo de filtros (widget de formulario accesible) -->
+      <fieldset class="filters-bar" aria-label="Filtros y ordenación de resultados">
+        <legend class="sr-only">Filtrar y ordenar resultados de precios</legend>
         <div class="filter-field">
           <label for="f-loc">Ubicación</label>
           <select id="f-loc" name="location" onchange="applyFilters()">
@@ -510,11 +635,12 @@
         </div>
         <div class="filter-field">
           <label for="f-min">Precio mínimo</label>
-          <input type="number" id="f-min" name="price-min" value="0" min="0" oninput="applyFilters()">
+          <input type="number" id="f-min" name="price-min" value="0" min="0" oninput="applyFilters()" aria-describedby="price-range-hint">
         </div>
         <div class="filter-field">
           <label for="f-max">Precio máximo</label>
           <input type="number" id="f-max" name="price-max" value="999999" min="0" oninput="applyFilters()">
+          <span id="price-range-hint" class="sr-only">Filtra resultados por rango de precio en pesos</span>
         </div>
         <div class="filter-field">
           <label for="f-sort">Ordenar por</label>
@@ -526,17 +652,19 @@
         </div>
       </fieldset>
 
-      <div id="no-search-yet" class="no-search-state" role="status">
+      <!-- Estado vacío accesible con role="status" -->
+      <div id="no-search-yet" class="no-search-state" role="status" aria-live="polite">
         <div class="no-search-icon" aria-hidden="true">
-          <svg fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+          <svg fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24" focusable="false"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
         </div>
         <h2 class="no-search-title">Aún no has hecho una búsqueda</h2>
         <p class="no-search-sub">Ve a Búsqueda Visual, carga una imagen y presiona "Analizar Precios"</p>
-        <button class="btn-sm" onclick="showPage('visual')" aria-label="Ir a la sección de búsqueda visual">
+        <button class="btn-sm" onclick="showPage('visual')">
           Ir a Búsqueda Visual
         </button>
       </div>
 
+      <!-- Grid de resultados: role="list" + aria-live para anunciar cambios por filtros -->
       <div
         id="results-grid"
         class="results-grid"
@@ -544,81 +672,87 @@
         role="list"
         aria-label="Resultados de precios por tienda"
         aria-live="polite"
+        aria-atomic="false"
       ></div>
     </section>
 
     <!-- ── PROFILE ── -->
-    <section class="page" id="page-profile" aria-label="Perfil de usuario">
+    <section class="page" id="page-profile" aria-labelledby="profile-title">
       <header class="page-header">
         <div>
-          <h1 class="page-title">Perfil de Usuario</h1>
+          <h1 class="page-title" id="profile-title">Perfil de Usuario</h1>
           <p class="page-sub">Gestiona tu información personal y configuración</p>
         </div>
       </header>
 
+      <!-- Profile header con avatar accesible -->
       <div class="profile-header">
-        <div class="avatar" id="user-avatar" role="img" aria-label="Avatar del usuario: CR">CR</div>
+        <!-- role="img" + aria-label descriptivo para el avatar con iniciales -->
+        <div class="avatar" id="user-avatar" role="img" aria-label="Avatar de usuario con iniciales CR">CR</div>
         <div>
           <p class="profile-name" id="user-display-name">Carlos Rodríguez</p>
-          <div class="profile-badges">
+          <div class="profile-badges" aria-label="Rol y antigüedad">
             <span class="badge badge-purple" id="user-role-badge">Analista Senior</span>
             <span class="badge badge-muted">Miembro desde 2024</span>
           </div>
         </div>
       </div>
 
-      <article class="form-card" aria-label="Información personal">
-        <h2>Información personal</h2>
-        <div class="form-row">
-          <label for="profile-name-input">
-            <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg>
-            Nombre completo
-          </label>
-          <input type="text" id="profile-name-input" name="fullname" value="Carlos Rodriguez" autocomplete="name">
-        </div>
-        <div class="form-row">
-          <label for="profile-email-input">
-            <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>
-            Correo electrónico
-          </label>
-          <input type="email" id="profile-email-input" name="email" value="carlos.rodriguez@empresa.com" autocomplete="email">
-        </div>
-        <div class="form-row">
-          <label for="profile-role-input">
-            <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 3H8"/></svg>
-            Rol
-          </label>
-          <input
-            type="text"
-            id="profile-role-input"
-            name="role"
-            value="Analista Senior"
-            disabled
-            aria-disabled="true"
-            style="opacity:.5;cursor:not-allowed"
-          >
-          <p class="form-note" id="role-note">Este campo es administrado por tu organización</p>
-        </div>
-        <button class="btn-sm" onclick="saveProfile()" aria-label="Guardar cambios del perfil">
-          Guardar Cambios
-        </button>
+      <!-- Formulario de perfil con <form> semántico -->
+      <article class="form-card" aria-labelledby="personal-info-title">
+        <h2 id="personal-info-title">Información personal</h2>
+        <form id="profile-form" novalidate onsubmit="handleProfileSubmit(event)">
+          <div class="form-row">
+            <label for="profile-name-input">
+              <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" focusable="false" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg>
+              Nombre completo
+            </label>
+            <input type="text" id="profile-name-input" name="fullname" value="Carlos Rodriguez" autocomplete="name">
+          </div>
+          <div class="form-row">
+            <label for="profile-email-input">
+              <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" focusable="false" aria-hidden="true"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>
+              Correo electrónico
+            </label>
+            <input type="email" id="profile-email-input" name="email" value="carlos.rodriguez@empresa.com" autocomplete="email">
+          </div>
+          <div class="form-row">
+            <label for="profile-role-input">
+              <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" focusable="false" aria-hidden="true"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 3H8"/></svg>
+              Rol
+            </label>
+            <input
+              type="text"
+              id="profile-role-input"
+              name="role"
+              value="Analista Senior"
+              disabled
+              aria-disabled="true"
+              aria-describedby="role-note"
+            >
+            <p class="form-note" id="role-note">Este campo es administrado por tu organización</p>
+          </div>
+          <button type="submit" class="btn-sm">
+            Guardar Cambios
+          </button>
+        </form>
       </article>
 
       <h2 class="section-title">Estadísticas de uso</h2>
-      <div class="stats-row" role="list" aria-label="Estadísticas de actividad">
-        <article class="stat-mini" role="listitem">
+      <ul class="stats-row" role="list" aria-label="Estadísticas de actividad del usuario">
+        <li class="stat-mini" role="listitem">
           <div class="val">324</div>
           <div class="lbl">Búsquedas realizadas</div>
-        </article>
-        <article class="stat-mini" role="listitem">
+        </li>
+        <li class="stat-mini" role="listitem">
           <div class="val">47</div>
           <div class="lbl">Oportunidades encontradas</div>
-        </article>
-        <article class="stat-mini" role="listitem">
-          <div class="val" style="color:var(--green)" aria-label="Ahorro estimado: 2.4 millones">$2.4M</div>
+        </li>
+        <li class="stat-mini" role="listitem">
+          <div class="val" style="color:var(--green)" aria-label="Ahorro estimado: 2 punto 4 millones de pesos">$2.4M</div>
           <div class="lbl">Ahorro estimado</div>
-        </article>
-      </div>
+        </li>
+      </ul>
     </section>
 
   </main>
@@ -627,6 +761,7 @@
 
 <!-- ════════════════════════════════════════
      MODAL — AGREGAR TIENDA
+     role="dialog" + aria-modal + focus trap
 ════════════════════════════════════════ -->
 <div
   class="modal-backdrop"
@@ -640,23 +775,53 @@
     <h2 id="modal-tienda-title">Agregar nueva Tienda</h2>
     <div class="modal-field">
       <label for="new-store-name">Nombre de la Tienda</label>
-      <input type="text" id="new-store-name" name="store-name" placeholder="Ej: Paris" autocomplete="off">
+      <input
+        type="text"
+        id="new-store-name"
+        name="store-name"
+        placeholder="Ej: Paris"
+        autocomplete="off"
+        aria-required="true"
+        aria-invalid="false"
+      >
     </div>
     <div class="modal-field">
       <label for="new-store-url">URL Base</label>
-      <input type="url" id="new-store-url" name="store-url" placeholder="https://www.paris.cl" autocomplete="off">
+      <input
+        type="url"
+        id="new-store-url"
+        name="store-url"
+        placeholder="https://www.paris.cl"
+        autocomplete="off"
+        aria-required="true"
+        aria-invalid="false"
+      >
     </div>
+    <!-- Widget: toggle switch accesible con role y aria-checked -->
     <div class="modal-toggle-row">
-      <label for="new-store-active">Iniciar búsqueda activa</label>
-      <label class="toggle" aria-label="Activar búsqueda para esta tienda">
-        <input type="checkbox" id="new-store-active" name="store-active" checked>
-        <span class="toggle-slider"></span>
+      <label for="new-store-active" id="store-active-label">Iniciar búsqueda activa</label>
+      <label class="toggle">
+        <!-- El toggle switch tiene role="switch" en el input para anunciarse correctamente -->
+        <input
+          type="checkbox"
+          id="new-store-active"
+          name="store-active"
+          role="switch"
+          aria-checked="true"
+          aria-labelledby="store-active-label"
+          checked
+          onchange="this.setAttribute('aria-checked', this.checked)"
+        >
+        <span class="toggle-slider" aria-hidden="true"></span>
       </label>
     </div>
     <div class="modal-actions">
-      <button class="btn-cancel" onclick="closeModal('modal-tienda')" aria-label="Cancelar y cerrar modal">Cancelar</button>
-      <button class="btn-confirm" onclick="addStore()" aria-label="Confirmar y agregar tienda">Agregar Tienda</button>
+      <!-- Botón cancelar con Escape gestionado en JS -->
+      <button class="btn-cancel" onclick="closeModal('modal-tienda')">Cancelar</button>
+      <button class="btn-confirm" onclick="addStore()">Agregar Tienda</button>
     </div>
+    <!-- Elemento de cierre accesible por teclado (Escape se maneja en JS) -->
+    <p class="sr-only">Presiona Escape para cerrar este diálogo</p>
   </article>
 </div>
 
@@ -664,91 +829,93 @@
 <!-- ════════════════════════════════════════
      ADMIN PANEL
 ════════════════════════════════════════ -->
-<div class="screen" id="admin" aria-label="Panel de administración">
+<div class="screen" id="admin" aria-label="Panel de administración PriceVision">
 
-  <nav class="admin-sidebar" role="navigation" aria-label="Navegación del panel administrativo">
-    <div class="admin-sidebar-logo" aria-label="PriceVision">PriceVision</div>
+  <!-- Nav del admin con aria-label diferenciado del nav de usuario -->
+  <nav class="admin-sidebar" aria-label="Navegación del panel de administración">
+    <div class="admin-sidebar-logo" role="img" aria-label="PriceVision">PriceVision</div>
     <div class="admin-sidebar-role" aria-label="Rol actual: Administrador">Panel Admin</div>
 
     <ul class="nav-list" role="list">
-      <li>
-        <button class="nav-item active" id="anav-overview" onclick="showAdminPage('overview')" aria-current="page" aria-label="Overview del sistema">
-          <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
+      <li role="listitem">
+        <button class="nav-item active" id="anav-overview" onclick="showAdminPage('overview')" aria-current="page">
+          <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" focusable="false" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
           <span>Overview</span>
         </button>
       </li>
-      <li>
-        <button class="nav-item" id="anav-tiendas" onclick="showAdminPage('tiendas')" aria-label="Gestión de tiendas">
-          <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+      <li role="listitem">
+        <button class="nav-item" id="anav-tiendas" onclick="showAdminPage('tiendas')">
+          <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" focusable="false" aria-hidden="true"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
           <span>Tiendas</span>
         </button>
       </li>
-      <li>
-        <button class="nav-item" id="anav-scraping" onclick="showAdminPage('scraping')" aria-label="Gestión de scraping">
-          <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
+      <li role="listitem">
+        <button class="nav-item" id="anav-scraping" onclick="showAdminPage('scraping')">
+          <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" focusable="false" aria-hidden="true"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
           <span>Scrapping</span>
         </button>
       </li>
-      <li>
-        <button class="nav-item" id="anav-usuarios" onclick="showAdminPage('usuarios')" aria-label="Gestión de usuarios">
-          <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+      <li role="listitem">
+        <button class="nav-item" id="anav-usuarios" onclick="showAdminPage('usuarios')">
+          <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" focusable="false" aria-hidden="true"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
           <span>Usuarios</span>
         </button>
       </li>
     </ul>
 
     <div class="sidebar-bottom">
-      <button class="nav-item" onclick="goUserMode()" aria-label="Cambiar a modo usuario">
-        <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><polyline points="15 18 9 12 15 6"/></svg>
+      <button class="nav-item" onclick="goUserMode()">
+        <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" focusable="false" aria-hidden="true"><polyline points="15 18 9 12 15 6"/></svg>
         <span>Modo usuario</span>
       </button>
-      <button class="nav-item" onclick="adminLogout()" aria-label="Cerrar sesión de administrador">
-        <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+      <button class="nav-item" onclick="adminLogout()">
+        <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" focusable="false" aria-hidden="true"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
         <span>Cerrar Sesión</span>
       </button>
     </div>
   </nav>
 
-  <main class="main" role="main" aria-label="Contenido administrativo">
+  <main class="main" aria-label="Contenido administrativo">
 
     <!-- OVERVIEW -->
-    <section class="admin-page active" id="admin-page-overview" aria-label="Overview del sistema">
+    <section class="admin-page active" id="admin-page-overview" aria-labelledby="admin-overview-title">
       <header class="page-header">
         <div>
-          <h1 class="page-title">Panel de Administración</h1>
+          <h1 class="page-title" id="admin-overview-title">Panel de Administración</h1>
           <p class="page-sub">Monitoreo y control del sistema de scraping</p>
         </div>
       </header>
 
-      <div class="stats-grid" role="list" aria-label="Métricas del sistema">
-        <article class="stat-card stagger-1" role="listitem">
+      <ul class="stats-grid" role="list" aria-label="Métricas del sistema">
+        <li class="stat-card stagger-1" role="listitem">
           <div class="stat-label">Total tiendas activas</div>
           <div class="stat-val">4/5</div>
           <span class="stat-tag tag-blue">Tiendas</span>
-        </article>
-        <article class="stat-card stagger-2" role="listitem">
+        </li>
+        <li class="stat-card stagger-2" role="listitem">
           <div class="stat-label">Última ejecución scraping</div>
           <div class="stat-val">08:30</div>
           <span class="status-badge s-green">Completado</span>
-        </article>
-        <article class="stat-card stagger-3" role="listitem">
+        </li>
+        <li class="stat-card stagger-3" role="listitem">
           <div class="stat-label">Productos normalizados</div>
-          <div class="stat-val" id="acnt-products" aria-live="polite">0</div>
+          <div class="stat-val" id="acnt-products" aria-live="polite" aria-atomic="true">0</div>
           <span class="stat-tag tag-green">Activos</span>
-        </article>
-        <article class="stat-card stagger-4" role="listitem">
+        </li>
+        <li class="stat-card stagger-4" role="listitem">
           <div class="stat-label">Errores recientes</div>
           <div class="stat-val" style="color:var(--red)">18</div>
           <span class="stat-tag s-red">Últimas 5 ejec.</span>
-        </article>
-      </div>
+        </li>
+      </ul>
 
       <h2 class="section-title">Actividad Reciente</h2>
-      <div class="table-wrap">
-        <table aria-label="Registro de actividad reciente del sistema">
+      <div class="table-wrap" role="region" aria-label="Registro de actividad reciente del sistema">
+        <table>
+          <caption class="sr-only">Registro de actividad reciente del sistema de scraping</caption>
           <thead>
             <tr>
-              <th scope="col" aria-label="Icono"></th>
+              <th scope="col"><span class="sr-only">Tipo de evento</span></th>
               <th scope="col">Descripción</th>
               <th scope="col">Tipo</th>
               <th scope="col">Fecha y hora</th>
@@ -757,38 +924,38 @@
           </thead>
           <tbody>
             <tr>
-              <td><div class="act-icon" aria-hidden="true"><svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg></div></td>
+              <td><div class="act-icon" aria-hidden="true"><svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" focusable="false"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg></div></td>
               <td>Scraping automático completado – 5789 productos</td>
               <td style="color:var(--muted)">Scraping</td>
-              <td style="color:var(--muted)"><time datetime="2026-02-25T08:34">2026-02-25 08:34</time></td>
+              <td style="color:var(--muted)"><time datetime="2026-02-25T08:34">25/02/2026 08:34</time></td>
               <td><span class="status-badge s-green">Exitoso</span></td>
             </tr>
             <tr>
-              <td><div class="act-icon" aria-hidden="true"><svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg></div></td>
+              <td><div class="act-icon" aria-hidden="true"><svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" focusable="false"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg></div></td>
               <td>Usuario Carlos Rodríguez inició sesión</td>
-              <td style="color:var(--muted)">User</td>
-              <td style="color:var(--muted)"><time datetime="2026-02-25T10:20">2026-02-25 10:20</time></td>
-              <td></td>
+              <td style="color:var(--muted)">Usuario</td>
+              <td style="color:var(--muted)"><time datetime="2026-02-25T10:20">25/02/2026 10:20</time></td>
+              <td><span class="sr-only">Sin estado especial</span></td>
             </tr>
             <tr>
-              <td><div class="act-icon" aria-hidden="true"><svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg></div></td>
+              <td><div class="act-icon" aria-hidden="true"><svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" focusable="false"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg></div></td>
               <td>Tienda Mercado Libre marcada como Inactiva</td>
-              <td style="color:var(--muted)">Store</td>
-              <td style="color:var(--muted)"><time datetime="2026-02-25T09:15">2026-02-25 09:15</time></td>
-              <td></td>
+              <td style="color:var(--muted)">Tienda</td>
+              <td style="color:var(--muted)"><time datetime="2026-02-25T09:15">25/02/2026 09:15</time></td>
+              <td><span class="sr-only">Sin estado especial</span></td>
             </tr>
             <tr>
-              <td><div class="act-icon" aria-hidden="true"><svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg></div></td>
+              <td><div class="act-icon" aria-hidden="true"><svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" focusable="false"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg></div></td>
               <td>Scraping manual ejecutado por María González</td>
               <td style="color:var(--muted)">Scraping</td>
-              <td style="color:var(--muted)"><time datetime="2026-02-24T15:30">2026-02-24 15:30</time></td>
+              <td style="color:var(--muted)"><time datetime="2026-02-24T15:30">24/02/2026 15:30</time></td>
               <td><span class="status-badge s-green">Exitoso</span></td>
             </tr>
             <tr>
-              <td><div class="act-icon" aria-hidden="true"><svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg></div></td>
+              <td><div class="act-icon" aria-hidden="true"><svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" focusable="false"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg></div></td>
               <td>Usuario Patricia Díaz desactivado</td>
-              <td style="color:var(--muted)">User</td>
-              <td style="color:var(--muted)"><time datetime="2026-02-24T12:00">2026-02-24 12:00</time></td>
+              <td style="color:var(--muted)">Usuario</td>
+              <td style="color:var(--muted)"><time datetime="2026-02-24T12:00">24/02/2026 12:00</time></td>
               <td><span class="status-badge s-amber">Advertencia</span></td>
             </tr>
           </tbody>
@@ -797,25 +964,26 @@
     </section>
 
     <!-- TIENDAS -->
-    <section class="admin-page" id="admin-page-tiendas" aria-label="Gestión de tiendas">
+    <section class="admin-page" id="admin-page-tiendas" aria-labelledby="admin-tiendas-title">
       <header class="page-header">
         <div>
-          <h1 class="page-title">Gestión de Tiendas</h1>
+          <h1 class="page-title" id="admin-tiendas-title">Gestión de Tiendas</h1>
           <p class="page-sub">Administra las fuentes de scraping y su configuración</p>
         </div>
-        <button class="btn-sm" onclick="openModal('modal-tienda')" aria-label="Abrir formulario para agregar nueva tienda">
+        <button class="btn-sm" onclick="openModal('modal-tienda')" aria-haspopup="dialog">
           + Agregar Tienda
         </button>
       </header>
 
-      <div class="stats-grid" style="grid-template-columns:repeat(3,1fr)" role="list">
-        <article class="stat-card" role="listitem"><div class="stat-label">Total de tiendas</div><div class="stat-val" id="store-count" aria-live="polite">5</div></article>
-        <article class="stat-card" role="listitem"><div class="stat-label">Tiendas activas</div><div class="stat-val" style="color:var(--green)" id="store-active-count" aria-live="polite">4</div></article>
-        <article class="stat-card" role="listitem"><div class="stat-label">Productos totales</div><div class="stat-val">5789</div></article>
-      </div>
+      <ul class="stats-grid" style="grid-template-columns:repeat(3,1fr)" role="list" aria-label="Resumen de tiendas">
+        <li class="stat-card" role="listitem"><div class="stat-label">Total de tiendas</div><div class="stat-val" id="store-count" aria-live="polite">5</div></li>
+        <li class="stat-card" role="listitem"><div class="stat-label">Tiendas activas</div><div class="stat-val" style="color:var(--green)" id="store-active-count" aria-live="polite">4</div></li>
+        <li class="stat-card" role="listitem"><div class="stat-label">Productos totales</div><div class="stat-val">5789</div></li>
+      </ul>
 
-      <div class="table-wrap" style="margin-top:8px">
-        <table aria-label="Lista de tiendas configuradas">
+      <div class="table-wrap" style="margin-top:8px" role="region" aria-label="Lista de tiendas configuradas">
+        <table>
+          <caption class="sr-only">Lista de tiendas configuradas en el sistema de scraping</caption>
           <thead>
             <tr>
               <th scope="col">Nombre</th>
@@ -831,13 +999,13 @@
               <td style="font-weight:500">Falabella</td>
               <td style="color:var(--muted);font-size:12px">https://www.falabella.com/falabella-cl</td>
               <td><span class="status-badge s-green">Activo</span></td>
-              <td style="color:var(--muted)"><time datetime="2026-02-25T08:30">2026-02-25 08:30</time></td>
+              <td style="color:var(--muted)"><time datetime="2026-02-25T08:30">25/02/2026 08:30</time></td>
               <td>1247</td>
               <td>
                 <div class="actions-cell">
                   <label class="toggle" aria-label="Activar o desactivar Falabella">
-                    <input type="checkbox" checked onchange="toggleStore(this,'Falabella')">
-                    <span class="toggle-slider"></span>
+                    <input type="checkbox" role="switch" aria-checked="true" checked onchange="toggleStore(this,'Falabella');this.setAttribute('aria-checked',this.checked)">
+                    <span class="toggle-slider" aria-hidden="true"></span>
                   </label>
                 </div>
               </td>
@@ -846,13 +1014,13 @@
               <td style="font-weight:500">Ripley</td>
               <td style="color:var(--muted);font-size:12px">https://simple.ripley.cl</td>
               <td><span class="status-badge s-green">Activo</span></td>
-              <td style="color:var(--muted)"><time datetime="2026-02-25T08:32">2026-02-25 08:32</time></td>
+              <td style="color:var(--muted)"><time datetime="2026-02-25T08:32">25/02/2026 08:32</time></td>
               <td>983</td>
               <td>
                 <div class="actions-cell">
                   <label class="toggle" aria-label="Activar o desactivar Ripley">
-                    <input type="checkbox" checked onchange="toggleStore(this,'Ripley')">
-                    <span class="toggle-slider"></span>
+                    <input type="checkbox" role="switch" aria-checked="true" checked onchange="toggleStore(this,'Ripley');this.setAttribute('aria-checked',this.checked)">
+                    <span class="toggle-slider" aria-hidden="true"></span>
                   </label>
                 </div>
               </td>
@@ -861,13 +1029,13 @@
               <td style="font-weight:500">Paris</td>
               <td style="color:var(--muted);font-size:12px">https://www.paris.cl</td>
               <td><span class="status-badge s-green">Activo</span></td>
-              <td style="color:var(--muted)"><time datetime="2026-02-25T08:35">2026-02-25 08:35</time></td>
+              <td style="color:var(--muted)"><time datetime="2026-02-25T08:35">25/02/2026 08:35</time></td>
               <td>1456</td>
               <td>
                 <div class="actions-cell">
                   <label class="toggle" aria-label="Activar o desactivar Paris">
-                    <input type="checkbox" checked onchange="toggleStore(this,'Paris')">
-                    <span class="toggle-slider"></span>
+                    <input type="checkbox" role="switch" aria-checked="true" checked onchange="toggleStore(this,'Paris');this.setAttribute('aria-checked',this.checked)">
+                    <span class="toggle-slider" aria-hidden="true"></span>
                   </label>
                 </div>
               </td>
@@ -876,13 +1044,13 @@
               <td style="font-weight:500">Líder</td>
               <td style="color:var(--muted);font-size:12px">https://www.lider.cl</td>
               <td><span class="status-badge s-red">Inactivo</span></td>
-              <td style="color:var(--muted)"><time datetime="2026-02-25T08:28">2026-02-25 08:28</time></td>
+              <td style="color:var(--muted)"><time datetime="2026-02-25T08:28">25/02/2026 08:28</time></td>
               <td>2103</td>
               <td>
                 <div class="actions-cell">
                   <label class="toggle" aria-label="Activar o desactivar Líder">
-                    <input type="checkbox" onchange="toggleStore(this,'Líder')">
-                    <span class="toggle-slider"></span>
+                    <input type="checkbox" role="switch" aria-checked="false" onchange="toggleStore(this,'Líder');this.setAttribute('aria-checked',this.checked)">
+                    <span class="toggle-slider" aria-hidden="true"></span>
                   </label>
                 </div>
               </td>
@@ -891,13 +1059,13 @@
               <td style="font-weight:500">Mercado Libre</td>
               <td style="color:var(--muted);font-size:12px">https://www.mercadolibre.cl</td>
               <td><span class="status-badge s-green">Activo</span></td>
-              <td style="color:var(--muted)"><time datetime="2026-02-20T10:15">2026-02-20 10:15</time></td>
+              <td style="color:var(--muted)"><time datetime="2026-02-20T10:15">20/02/2026 10:15</time></td>
               <td>0</td>
               <td>
                 <div class="actions-cell">
                   <label class="toggle" aria-label="Activar o desactivar Mercado Libre">
-                    <input type="checkbox" onchange="toggleStore(this,'Mercado Libre')">
-                    <span class="toggle-slider"></span>
+                    <input type="checkbox" role="switch" aria-checked="false" onchange="toggleStore(this,'Mercado Libre');this.setAttribute('aria-checked',this.checked)">
+                    <span class="toggle-slider" aria-hidden="true"></span>
                   </label>
                 </div>
               </td>
@@ -908,27 +1076,28 @@
     </section>
 
     <!-- SCRAPING -->
-    <section class="admin-page" id="admin-page-scraping" aria-label="Gestión de scraping">
+    <section class="admin-page" id="admin-page-scraping" aria-labelledby="admin-scraping-title">
       <header class="page-header">
         <div>
-          <h1 class="page-title">Gestión de Scraping</h1>
+          <h1 class="page-title" id="admin-scraping-title">Gestión de Scraping</h1>
           <p class="page-sub">Monitorea y controla las ejecuciones de scraping</p>
         </div>
-        <button class="btn-sm" onclick="runScraping()" aria-label="Ejecutar scraping manualmente ahora">
+        <button class="btn-sm" onclick="runScraping()">
           ↺ Ejecutar scraping manual
         </button>
       </header>
 
-      <div class="stats-grid" role="list">
-        <article class="stat-card" role="listitem"><div class="stat-label">Frecuencia programada</div><div class="stat-val" style="font-size:22px">Diaria</div><span class="stat-tag tag-muted" style="font-size:10px">08:30 AM</span></article>
-        <article class="stat-card" role="listitem"><div class="stat-label">Última ejecución</div><div class="stat-val" style="font-size:20px" id="last-execution-date" aria-live="polite">25-02-2026</div><span class="status-badge s-green" style="margin-top:6px">Completado</span></article>
-        <article class="stat-card" role="listitem"><div class="stat-label">Productos hoy</div><div class="stat-val" style="color:var(--green)">5789</div><span class="stat-tag tag-muted">Extraídos exitosamente</span></article>
-        <article class="stat-card" role="listitem"><div class="stat-label">Duración promedio</div><div class="stat-val">3.4<span style="font-size:14px;color:var(--muted)"> m</span></div><span class="stat-tag tag-muted">Últimas 5 ejecuciones</span></article>
-      </div>
+      <ul class="stats-grid" role="list" aria-label="Estadísticas de scraping">
+        <li class="stat-card" role="listitem"><div class="stat-label">Frecuencia programada</div><div class="stat-val" style="font-size:22px">Diaria</div><span class="stat-tag tag-muted" style="font-size:10px">08:30 AM</span></li>
+        <li class="stat-card" role="listitem"><div class="stat-label">Última ejecución</div><div class="stat-val" style="font-size:20px" id="last-execution-date" aria-live="polite">25-02-2026</div><span class="status-badge s-green" style="margin-top:6px">Completado</span></li>
+        <li class="stat-card" role="listitem"><div class="stat-label">Productos hoy</div><div class="stat-val" style="color:var(--green)">5789</div><span class="stat-tag tag-muted">Extraídos exitosamente</span></li>
+        <li class="stat-card" role="listitem"><div class="stat-label">Duración promedio</div><div class="stat-val">3.4<span style="font-size:14px;color:var(--muted)"> m</span></div><span class="stat-tag tag-muted">Últimas 5 ejecuciones</span></li>
+      </ul>
 
       <h2 class="section-title">Historial de ejecuciones</h2>
-      <div class="table-wrap">
-        <table aria-label="Historial de ejecuciones de scraping">
+      <div class="table-wrap" role="region" aria-label="Historial de ejecuciones de scraping">
+        <table>
+          <caption class="sr-only">Historial de las últimas ejecuciones del sistema de scraping</caption>
           <thead>
             <tr>
               <th scope="col">Fecha y hora</th>
@@ -940,36 +1109,37 @@
             </tr>
           </thead>
           <tbody id="scraping-history-tbody">
-            <tr><td><time datetime="2026-02-25T15:40">25-02-2026, 03:40 p.m.</time></td><td><span class="status-badge s-green">Completado</span></td><td style="color:var(--green)">5226</td><td>0</td><td style="color:var(--muted)">3m 50s</td><td><button class="link-btn" onclick="showToast('Logs','Abriendo logs…')" aria-label="Ver logs de esta ejecución">Ver logs</button></td></tr>
-            <tr><td><time datetime="2026-02-25T08:30">2026-02-25 08:30</time></td><td><span class="status-badge s-green">Completado</span></td><td style="color:var(--green)">5789</td><td>0</td><td style="color:var(--muted)">4m 32s</td><td><button class="link-btn" onclick="showToast('Logs','Abriendo logs…')" aria-label="Ver logs de esta ejecución">Ver logs</button></td></tr>
-            <tr><td><time datetime="2026-02-24T08:30">2026-02-24 08:30</time></td><td><span class="status-badge s-red">Error</span></td><td>5654</td><td style="color:var(--red)">2</td><td style="color:var(--muted)">4m 45s</td><td><button class="link-btn" onclick="showToast('Logs','Abriendo logs…')" aria-label="Ver logs de esta ejecución">Ver logs</button></td></tr>
-            <tr><td><time datetime="2026-02-23T08:30">2026-02-23 08:30</time></td><td><span class="status-badge s-green">Completado</span></td><td style="color:var(--green)">5701</td><td>0</td><td style="color:var(--muted)">4m 28s</td><td><button class="link-btn" onclick="showToast('Logs','Abriendo logs…')" aria-label="Ver logs de esta ejecución">Ver logs</button></td></tr>
-            <tr><td><time datetime="2026-02-22T08:30">2026-02-22 08:30</time></td><td><span class="status-badge s-red">Error</span></td><td>2234</td><td style="color:var(--red)">15</td><td style="color:var(--muted)">2m 10s</td><td><button class="link-btn" onclick="showToast('Logs','Abriendo logs…')" aria-label="Ver logs de esta ejecución">Ver logs</button></td></tr>
-            <tr><td><time datetime="2026-02-21T08:30">2026-02-21 08:30</time></td><td><span class="status-badge s-red">Error</span></td><td>5623</td><td style="color:var(--red)">1</td><td style="color:var(--muted)">4m 28s</td><td><button class="link-btn" onclick="showToast('Logs','Abriendo logs…')" aria-label="Ver logs de esta ejecución">Ver logs</button></td></tr>
+            <tr><td><time datetime="2026-02-25T15:40">25-02-2026, 03:40 p.m.</time></td><td><span class="status-badge s-green">Completado</span></td><td style="color:var(--green)">5226</td><td>0</td><td style="color:var(--muted)">3m 50s</td><td><button class="link-btn" onclick="showToast('Logs','Abriendo logs…')">Ver logs</button></td></tr>
+            <tr><td><time datetime="2026-02-25T08:30">25/02/2026 08:30</time></td><td><span class="status-badge s-green">Completado</span></td><td style="color:var(--green)">5789</td><td>0</td><td style="color:var(--muted)">4m 32s</td><td><button class="link-btn" onclick="showToast('Logs','Abriendo logs…')">Ver logs</button></td></tr>
+            <tr><td><time datetime="2026-02-24T08:30">24/02/2026 08:30</time></td><td><span class="status-badge s-red">Error</span></td><td>5654</td><td style="color:var(--red)">2</td><td style="color:var(--muted)">4m 45s</td><td><button class="link-btn" onclick="showToast('Logs','Abriendo logs…')">Ver logs</button></td></tr>
+            <tr><td><time datetime="2026-02-23T08:30">23/02/2026 08:30</time></td><td><span class="status-badge s-green">Completado</span></td><td style="color:var(--green)">5701</td><td>0</td><td style="color:var(--muted)">4m 28s</td><td><button class="link-btn" onclick="showToast('Logs','Abriendo logs…')">Ver logs</button></td></tr>
+            <tr><td><time datetime="2026-02-22T08:30">22/02/2026 08:30</time></td><td><span class="status-badge s-red">Error</span></td><td>2234</td><td style="color:var(--red)">15</td><td style="color:var(--muted)">2m 10s</td><td><button class="link-btn" onclick="showToast('Logs','Abriendo logs…')">Ver logs</button></td></tr>
+            <tr><td><time datetime="2026-02-21T08:30">21/02/2026 08:30</time></td><td><span class="status-badge s-red">Error</span></td><td>5623</td><td style="color:var(--red)">1</td><td style="color:var(--muted)">4m 28s</td><td><button class="link-btn" onclick="showToast('Logs','Abriendo logs…')">Ver logs</button></td></tr>
           </tbody>
         </table>
       </div>
     </section>
 
     <!-- USUARIOS -->
-    <section class="admin-page" id="admin-page-usuarios" aria-label="Gestión de usuarios">
+    <section class="admin-page" id="admin-page-usuarios" aria-labelledby="admin-usuarios-title">
       <header class="page-header">
         <div>
-          <h1 class="page-title">Gestión de Usuarios</h1>
+          <h1 class="page-title" id="admin-usuarios-title">Gestión de Usuarios</h1>
           <p class="page-sub">Administra roles y permisos de acceso al sistema</p>
         </div>
       </header>
 
-      <div class="stats-grid" role="list">
-        <article class="stat-card" role="listitem"><div class="stat-label">Total usuarios</div><div class="stat-val">5</div></article>
-        <article class="stat-card" role="listitem"><div class="stat-label">Usuarios activos</div><div class="stat-val" style="color:var(--green)">4</div><span class="stat-tag tag-green">En línea</span></article>
-        <article class="stat-card" role="listitem"><div class="stat-label">Administradores</div><div class="stat-val">1</div><span class="stat-tag tag-blue">Admin</span></article>
-        <article class="stat-card" role="listitem"><div class="stat-label">Analistas</div><div class="stat-val">4</div><span class="stat-tag tag-muted">Analistas</span></article>
-      </div>
+      <ul class="stats-grid" role="list" aria-label="Estadísticas de usuarios del sistema">
+        <li class="stat-card" role="listitem"><div class="stat-label">Total usuarios</div><div class="stat-val">5</div></li>
+        <li class="stat-card" role="listitem"><div class="stat-label">Usuarios activos</div><div class="stat-val" style="color:var(--green)">4</div><span class="stat-tag tag-green">En línea</span></li>
+        <li class="stat-card" role="listitem"><div class="stat-label">Administradores</div><div class="stat-val">1</div><span class="stat-tag tag-blue">Admin</span></li>
+        <li class="stat-card" role="listitem"><div class="stat-label">Analistas</div><div class="stat-val">4</div><span class="stat-tag tag-muted">Analistas</span></li>
+      </ul>
 
       <h2 class="section-title">Lista de usuarios</h2>
-      <div class="table-wrap">
-        <table aria-label="Lista de usuarios del sistema">
+      <div class="table-wrap" role="region" aria-label="Lista completa de usuarios del sistema">
+        <table>
+          <caption class="sr-only">Lista de usuarios con sus roles, estados y últimos accesos</caption>
           <thead>
             <tr>
               <th scope="col">Nombre</th>
@@ -977,7 +1147,7 @@
               <th scope="col">Rol</th>
               <th scope="col">Estado</th>
               <th scope="col">Último acceso</th>
-              <th scope="col">Acciones</th>
+              <th scope="col">Activar/Desactivar</th>
             </tr>
           </thead>
           <tbody>
@@ -986,49 +1156,50 @@
               <td style="color:var(--accent2);font-size:12px">maria.gonzalez@pricevision.com</td>
               <td><span class="role-badge role-admin">Admin</span></td>
               <td><span class="status-badge s-green">Activo</span></td>
-              <td style="color:var(--green);font-size:12px"><time datetime="2026-02-25T09:45">2026-02-25 09:45</time></td>
-              <td><label class="toggle" aria-label="Activar o desactivar a María González"><input type="checkbox" checked onchange="toggleUser(this,'María González')"><span class="toggle-slider"></span></label></td>
+              <td style="color:var(--green);font-size:12px"><time datetime="2026-02-25T09:45">25/02/2026 09:45</time></td>
+              <td><label class="toggle" aria-label="Activar o desactivar a María González"><input type="checkbox" role="switch" aria-checked="true" checked onchange="toggleUser(this,'María González');this.setAttribute('aria-checked',this.checked)"><span class="toggle-slider" aria-hidden="true"></span></label></td>
             </tr>
             <tr>
               <td style="font-weight:500">Carlos Rodríguez</td>
               <td style="color:var(--accent2);font-size:12px">carlos.rodriguez@pricevision.com</td>
               <td><span class="role-badge role-analyst">Analista</span></td>
               <td><span class="status-badge s-green">Activo</span></td>
-              <td style="color:var(--green);font-size:12px"><time datetime="2026-02-25T10:20">2026-02-25 10:20</time></td>
-              <td><label class="toggle" aria-label="Activar o desactivar a Carlos Rodríguez"><input type="checkbox" checked onchange="toggleUser(this,'Carlos Rodríguez')"><span class="toggle-slider"></span></label></td>
+              <td style="color:var(--green);font-size:12px"><time datetime="2026-02-25T10:20">25/02/2026 10:20</time></td>
+              <td><label class="toggle" aria-label="Activar o desactivar a Carlos Rodríguez"><input type="checkbox" role="switch" aria-checked="true" checked onchange="toggleUser(this,'Carlos Rodríguez');this.setAttribute('aria-checked',this.checked)"><span class="toggle-slider" aria-hidden="true"></span></label></td>
             </tr>
             <tr>
               <td style="font-weight:500">Ana Martínez</td>
               <td style="color:var(--accent2);font-size:12px">ana.martinez@pricevision.com</td>
               <td><span class="role-badge role-analyst">Analista</span></td>
               <td><span class="status-badge s-green">Activo</span></td>
-              <td style="color:var(--green);font-size:12px"><time datetime="2026-02-24T16:30">2026-02-24 16:30</time></td>
-              <td><label class="toggle" aria-label="Activar o desactivar a Ana Martínez"><input type="checkbox" checked onchange="toggleUser(this,'Ana Martínez')"><span class="toggle-slider"></span></label></td>
+              <td style="color:var(--green);font-size:12px"><time datetime="2026-02-24T16:30">24/02/2026 16:30</time></td>
+              <td><label class="toggle" aria-label="Activar o desactivar a Ana Martínez"><input type="checkbox" role="switch" aria-checked="true" checked onchange="toggleUser(this,'Ana Martínez');this.setAttribute('aria-checked',this.checked)"><span class="toggle-slider" aria-hidden="true"></span></label></td>
             </tr>
             <tr>
               <td style="font-weight:500">Luis Silva</td>
               <td style="color:var(--muted);font-size:12px">luis.silva@pricevision.com</td>
               <td><span class="role-badge role-analyst">Analista</span></td>
               <td><span class="status-badge s-red">Inactivo</span></td>
-              <td style="color:var(--muted);font-size:12px"><time datetime="2026-02-23T08:15">2026-02-23 08:15</time></td>
-              <td><label class="toggle" aria-label="Activar o desactivar a Luis Silva"><input type="checkbox" onchange="toggleUser(this,'Luis Silva')"><span class="toggle-slider"></span></label></td>
+              <td style="color:var(--muted);font-size:12px"><time datetime="2026-02-23T08:15">23/02/2026 08:15</time></td>
+              <td><label class="toggle" aria-label="Activar o desactivar a Luis Silva"><input type="checkbox" role="switch" aria-checked="false" onchange="toggleUser(this,'Luis Silva');this.setAttribute('aria-checked',this.checked)"><span class="toggle-slider" aria-hidden="true"></span></label></td>
             </tr>
             <tr>
               <td style="font-weight:500">Patricia Díaz</td>
               <td style="color:var(--accent2);font-size:12px">patricia.diaz@pricevision.com</td>
               <td><span class="role-badge role-analyst">Analista</span></td>
               <td><span class="status-badge s-green">Activo</span></td>
-              <td style="color:var(--green);font-size:12px"><time datetime="2026-02-15T11:00">2026-02-15 11:00</time></td>
-              <td><label class="toggle" aria-label="Activar o desactivar a Patricia Díaz"><input type="checkbox" checked onchange="toggleUser(this,'Patricia Díaz')"><span class="toggle-slider"></span></label></td>
+              <td style="color:var(--green);font-size:12px"><time datetime="2026-02-15T11:00">15/02/2026 11:00</time></td>
+              <td><label class="toggle" aria-label="Activar o desactivar a Patricia Díaz"><input type="checkbox" role="switch" aria-checked="true" checked onchange="toggleUser(this,'Patricia Díaz');this.setAttribute('aria-checked',this.checked)"><span class="toggle-slider" aria-hidden="true"></span></label></td>
             </tr>
           </tbody>
         </table>
       </div>
 
-      <aside class="info-box" role="note" aria-label="Información sobre roles del sistema">
-        <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+      <!-- Nota informativa con role="note" semántico -->
+      <aside class="info-box" role="note" aria-labelledby="roles-info-title">
+        <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" focusable="false" aria-hidden="true"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
         <p>
-          <strong>Información sobre roles</strong><br>
+          <strong id="roles-info-title">Información sobre roles del sistema</strong><br>
           <strong>Admin:</strong> Acceso completo al sistema, incluyendo gestión de tiendas, scraping y usuarios.<br>
           <strong>Analista:</strong> Acceso a búsquedas, análisis de precios e historial. Sin permisos administrativos.
         </p>
