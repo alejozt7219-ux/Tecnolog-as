@@ -15,6 +15,8 @@ let currentScreen = 'landing';
 let isAdminEmail  = false;
 let searchDone    = false;
 let fromHistory   = false;
+/* Bandera que indica si el usuario eligió explícitamente acceder como admin */
+let wantsAdmin    = false;
 
 /* ═══════════════════ MOCK DATA ═══════════════════ */
 const ALL_RESULTS = [
@@ -111,10 +113,6 @@ function setNavActive(navId, scope) {
 }
 
 /* ═══════════════════ WIDGET: TOGGLE CONTRASEÑA ═══════════════════ */
-/**
- * Alterna la visibilidad de un campo contraseña.
- * Actualiza aria-pressed en el botón para comunicar el estado a lectores.
- */
 function togglePasswordVisibility(inputId, btnId) {
   const input = document.getElementById(inputId);
   const btn   = document.getElementById(btnId);
@@ -127,10 +125,6 @@ function togglePasswordVisibility(inputId, btnId) {
 }
 
 /* ═══════════════════ VALIDACIÓN DE FORMULARIOS ═══════════════════ */
-/**
- * Muestra un error accesible en un campo.
- * Usa aria-invalid y role="alert" para anunciar el error.
- */
 function showFieldError(inputId, errorId, message) {
   const input = document.getElementById(inputId);
   const error = document.getElementById(errorId);
@@ -141,9 +135,6 @@ function showFieldError(inputId, errorId, message) {
   }
 }
 
-/**
- * Limpia el error de un campo.
- */
 function clearFieldError(inputId, errorId) {
   const input = document.getElementById(inputId);
   const error = document.getElementById(errorId);
@@ -154,9 +145,6 @@ function clearFieldError(inputId, errorId) {
   }
 }
 
-/**
- * Limpia todos los errores de un formulario.
- */
 function clearFormErrors(formId) {
   const form = document.getElementById(formId);
   if (!form) return;
@@ -169,12 +157,15 @@ function clearFormErrors(formId) {
 
 /* ═══════════════════ AUTH ═══════════════════ */
 function goLogin(role) {
+  // ── FIX: guardar la intención del usuario ──
+  wantsAdmin = (role === 'admin');
+
   const greeting = document.getElementById('login-greeting');
-  if (greeting) greeting.textContent = role === 'admin' ? 'Hola de nuevo Admin!' : 'Hola de nuevo';
+  if (greeting) greeting.textContent = wantsAdmin ? 'Hola de nuevo Admin!' : 'Hola de nuevo';
 
   const emailInput = document.getElementById('email-input');
   const passInput  = document.getElementById('pass-input');
-  if (emailInput) emailInput.value = role === 'admin' ? 'admin@empresa.com' : '';
+  if (emailInput) emailInput.value = wantsAdmin ? 'admin@empresa.com' : '';
   if (passInput)  passInput.value  = '';
 
   clearFormErrors('login-form');
@@ -182,6 +173,9 @@ function goLogin(role) {
 }
 
 function goAdminLogin() {
+  // ── FIX: esta ruta también marca la intención admin ──
+  wantsAdmin = true;
+
   const greeting = document.getElementById('login-greeting');
   if (greeting) greeting.textContent = 'Hola de nuevo Admin!';
 
@@ -235,7 +229,6 @@ function doLogin() {
   }
 
   if (hasError) {
-    // Mover foco al primer campo con error para accesibilidad
     const firstError = document.querySelector('[aria-invalid="true"]');
     if (firstError) firstError.focus();
     return;
@@ -244,9 +237,12 @@ function doLogin() {
   showLoader('Autenticando…');
   setTimeout(() => {
     hideLoader();
+
+    // ── FIX: la decisión se basa en wantsAdmin (intención explícita del usuario)
+    //         combinada con que el email contenga 'admin'.
+    //         Ya no dependemos del texto del DOM para decidir la ruta. ──
     isAdminEmail = email.toLowerCase().includes('admin');
-    const greetingEl = document.getElementById('login-greeting');
-    const goAdmin    = isAdminEmail && greetingEl && greetingEl.textContent.includes('Admin');
+    const goAdmin = wantsAdmin && isAdminEmail;
 
     if (goAdmin) {
       showScreen('admin');
@@ -331,6 +327,8 @@ function doRegister() {
     const adminBtn = document.getElementById('admin-btn');
     if (adminBtn) adminBtn.style.display = 'flex';
 
+    // El registro siempre lleva al modo usuario
+    wantsAdmin = false;
     showScreen('app');
     showPage('dashboard');
     animateStats();
@@ -340,6 +338,7 @@ function doRegister() {
 
 function logout() {
   searchDone = false;
+  wantsAdmin = false;
   const emailEl = document.getElementById('email-input');
   const passEl  = document.getElementById('pass-input');
   if (emailEl) emailEl.value = '';
@@ -350,6 +349,7 @@ function logout() {
 }
 
 function adminLogout() {
+  wantsAdmin = false;
   const emailEl = document.getElementById('email-input');
   const passEl  = document.getElementById('pass-input');
   if (emailEl) emailEl.value = '';
@@ -358,6 +358,8 @@ function adminLogout() {
 }
 
 function goUserMode() {
+  // Desde el panel admin, vuelve al login como usuario
+  wantsAdmin = false;
   const greeting = document.getElementById('login-greeting');
   if (greeting) greeting.textContent = 'Hola de nuevo';
   const emailEl = document.getElementById('email-input');
@@ -584,7 +586,6 @@ function renderResults(data) {
     const card = document.createElement('article');
     card.className = 'result-card' + (r.best ? ' best-deal' : '');
     card.setAttribute('role', 'listitem');
-    // tabindex="0" permite navegar con teclado entre resultados
     card.setAttribute('tabindex', '0');
     card.setAttribute('aria-label',
       `${r.store}: $${r.price.toLocaleString('es-CL')}. ${r.meta}${r.best ? '. Mejor precio disponible' : ''}`
@@ -598,7 +599,6 @@ function renderResults(data) {
       </div>
       <div class="result-meta" aria-hidden="true">${r.meta}</div>
     `;
-    // Activar con Enter o Espacio también (widget de tarjeta interactiva)
     card.addEventListener('keydown', e => {
       if (e.key === 'Enter' || e.key === ' ') {
         e.preventDefault();
@@ -632,7 +632,6 @@ function applyFilters() {
 }
 
 /* ═══════════════════ PERFIL ═══════════════════ */
-/* Submit handler semántico para perfil */
 function handleProfileSubmit(event) {
   event.preventDefault();
   saveProfile();
@@ -655,31 +654,23 @@ function saveProfile() {
 }
 
 /* ═══════════════════ MODALS + FOCUS TRAP ═══════════════════ */
-/**
- * Selecciona todos los elementos focusables dentro de un contenedor.
- */
 function getFocusableElements(container) {
   return Array.from(container.querySelectorAll(
     'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
   ));
 }
 
-/**
- * Abre un modal, actualiza aria-hidden y aplica focus trap.
- */
 function openModal(id) {
   const modal = document.getElementById(id);
   if (!modal) return;
   modal.classList.add('open');
   modal.setAttribute('aria-hidden', 'false');
 
-  // Foco al primer elemento interactivo del modal
   const focusable = getFocusableElements(modal);
   if (focusable.length > 0) {
     setTimeout(() => focusable[0].focus(), 50);
   }
 
-  // Focus trap: Tab y Shift+Tab quedan dentro del modal
   modal._trapHandler = (e) => {
     if (e.key !== 'Tab') return;
     const elements = getFocusableElements(modal);
@@ -688,13 +679,11 @@ function openModal(id) {
     const last  = elements[elements.length - 1];
 
     if (e.shiftKey) {
-      // Shift+Tab: si estamos en el primero, ir al último
       if (document.activeElement === first) {
         e.preventDefault();
         last.focus();
       }
     } else {
-      // Tab: si estamos en el último, ir al primero
       if (document.activeElement === last) {
         e.preventDefault();
         first.focus();
@@ -704,22 +693,17 @@ function openModal(id) {
   document.addEventListener('keydown', modal._trapHandler);
 }
 
-/**
- * Cierra un modal y restaura el foco al elemento que lo abrió.
- */
 function closeModal(id) {
   const modal = document.getElementById(id);
   if (!modal) return;
   modal.classList.remove('open');
   modal.setAttribute('aria-hidden', 'true');
 
-  // Remover el focus trap
   if (modal._trapHandler) {
     document.removeEventListener('keydown', modal._trapHandler);
     modal._trapHandler = null;
   }
 
-  // Devolver foco al botón que abrió el modal
   const opener = document.querySelector(`[onclick*="openModal('${id}')"]`);
   if (opener) opener.focus();
 }
