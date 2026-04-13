@@ -159,6 +159,32 @@
 ════════════════════════════════════════ -->
 <div class="screen" id="login" aria-label="Pantalla de inicio de sesión">
   <div class="login-wrap">
+
+    <!-- ── BOTÓN VOLVER AL INICIO (puerta) ──
+         Agregado: navega de regreso a la pantalla landing.
+         Usa la clase .back-btn-door para el estilo de puertecita,
+         manteniendo compatibilidad con el .back-link existente en register. -->
+    <button
+      class="back-btn-door"
+      onclick="showScreen('landing')"
+      aria-label="Volver a la pantalla de inicio"
+    >
+      <!-- Icono puerta SVG -->
+      <span class="door-icon" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" focusable="false">
+          <!-- Marco de la puerta -->
+          <rect x="3" y="2" width="13" height="20" rx="1.5"/>
+          <!-- Manija de la puerta -->
+          <circle cx="14" cy="12" r="1" fill="currentColor" stroke="none"/>
+          <!-- Flecha saliendo -->
+          <polyline points="19 9 22 12 19 15"/>
+          <line x1="10" y1="12" x2="22" y2="12"/>
+        </svg>
+      </span>
+      <span class="door-label">Inicio</span>
+    </button>
+    <!-- ── /BOTÓN VOLVER ── -->
+
     <div class="login-logo" role="img" aria-label="PriceVision">PriceVision</div>
     <p class="login-tagline">Sistema de búsqueda visual y comparación de precios</p>
 
@@ -241,10 +267,25 @@
 <div class="screen" id="register" aria-label="Pantalla de registro de cuenta">
   <div class="login-wrap" style="max-width:460px;overflow-y:auto;max-height:100vh;padding:30px 40px">
 
-    <button class="back-link" onclick="showScreen('landing')" aria-label="Volver a la página de inicio">
-      <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" focusable="false"><polyline points="15 18 9 12 15 6"/></svg>
-      Volver al inicio
+    <!-- ── BOTÓN VOLVER AL INICIO (puerta) ──
+         Reemplaza el .back-link original manteniendo la misma función
+         (showScreen('landing')) pero con el nuevo estilo de puertecita. -->
+    <button
+      class="back-btn-door"
+      onclick="showScreen('landing')"
+      aria-label="Volver a la pantalla de inicio"
+    >
+      <span class="door-icon" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" focusable="false">
+          <rect x="3" y="2" width="13" height="20" rx="1.5"/>
+          <circle cx="14" cy="12" r="1" fill="currentColor" stroke="none"/>
+          <polyline points="19 9 22 12 19 15"/>
+          <line x1="10" y1="12" x2="22" y2="12"/>
+        </svg>
+      </span>
+      <span class="door-label">Inicio</span>
     </button>
+    <!-- ── /BOTÓN VOLVER ── -->
 
     <div class="login-logo" role="img" aria-label="PriceVision">PriceVision</div>
     <p class="login-tagline">Crea tu cuenta y empieza a ahorrar</p>
