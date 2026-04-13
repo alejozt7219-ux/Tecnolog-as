@@ -584,7 +584,7 @@ select[aria-invalid="true"] {
   border-radius: 2px;
 }
 
-/* Botón "volver" (estilo original — mantenido para compatibilidad) */
+/* Botón "volver" */
 .back-link {
   display: inline-flex;
   align-items: center;
@@ -602,134 +602,6 @@ select[aria-invalid="true"] {
 }
 .back-link:hover { color: var(--text); }
 .back-link svg { width: 14px; height: 14px; }
-
-/* ══════════════ WIDGET: BOTÓN VOLVER — PUERTA ══════════════
-   Nuevo botón de retorno al inicio con iconografía de puerta.
-   Aparece en la esquina superior izquierda de las pantallas
-   de login y register. Usa position: fixed para anclarse
-   a la pantalla independientemente del scroll del .login-wrap.
-   El icono SVG de puerta comunica visualmente "salida / inicio".
-   ── */
-
-/* Botón fijo arriba a la izquierda — solo visible cuando
-   su pantalla padre está activa gracias a pointer-events */
-.back-btn-door {
-  /* Posición: esquina superior izquierda de la pantalla */
-  position: fixed;
-  top: 20px;
-  left: 20px;
-  z-index: 20;
-
-  /* Layout: Flexbox fila para icono + texto */
-  display: inline-flex;
-  align-items: center;
-  gap: 9px;
-
-  /* Caja */
-  padding: 10px 16px 10px 12px;
-  border-radius: 50px;          /* Píldora redondeada */
-
-  /* Visual: fondo semitransparente con blur para efecto glass */
-  background: rgba(28, 28, 40, 0.75);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
-  border: 1px solid rgba(255, 255, 255, 0.10);
-  box-shadow:
-    0 4px 20px rgba(0, 0, 0, 0.35),
-    inset 0 1px 0 rgba(255, 255, 255, 0.06);
-
-  /* Tipografía */
-  font-family: var(--font-body);
-  font-size: 13px;
-  font-weight: 500;
-  color: var(--muted);
-
-  /* Interacción */
-  cursor: pointer;
-  transition:
-    background 0.25s ease,
-    border-color 0.25s ease,
-    color 0.25s ease,
-    transform 0.2s ease,
-    box-shadow 0.25s ease;
-
-  /* Área mínima táctil WCAG */
-  min-height: 44px;
-
-  /* Animación de entrada: baja desde arriba */
-  opacity: 0;
-  animation: doorBtnEnter 0.5s 0.25s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
-}
-
-/* Estado hover: se ilumina con el color de acento */
-.back-btn-door:hover {
-  background: rgba(124, 111, 255, 0.15);
-  border-color: rgba(124, 111, 255, 0.35);
-  color: var(--accent2);
-  transform: translateY(-2px);
-  box-shadow:
-    0 8px 28px rgba(124, 111, 255, 0.2),
-    inset 0 1px 0 rgba(255, 255, 255, 0.08);
-}
-
-/* Estado activo: pequeño clic */
-.back-btn-door:active {
-  transform: translateY(0px) scale(0.97);
-}
-
-/* Foco visible para teclado */
-.back-btn-door:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 3px;
-  border-radius: 50px;
-}
-
-/* Contenedor del SVG de puerta */
-.door-icon {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 22px;
-  height: 22px;
-  /* Fondo sutil para que el icono destaque */
-  background: rgba(124, 111, 255, 0.12);
-  border-radius: 7px;
-  flex-shrink: 0;
-  transition: background 0.25s ease;
-}
-.back-btn-door:hover .door-icon {
-  background: rgba(124, 111, 255, 0.22);
-}
-.door-icon svg {
-  width: 13px;
-  height: 13px;
-  stroke: var(--accent2);
-  transition: stroke 0.25s ease, transform 0.25s ease;
-}
-
-/* Animación sutil: la flecha del icono se desplaza al hacer hover */
-.back-btn-door:hover .door-icon svg {
-  transform: translateX(2px);
-}
-
-/* Texto del botón */
-.door-label {
-  letter-spacing: 0.2px;
-  transition: color 0.25s ease;
-}
-
-/* Animación de entrada del botón puerta */
-@keyframes doorBtnEnter {
-  from {
-    opacity: 0;
-    transform: translateY(-12px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-/* ── /WIDGET BOTÓN PUERTA ── */
 
 /* Divisor "o" */
 .divider {
@@ -1844,17 +1716,6 @@ tbody tr:hover { background: var(--bg3); }
   /* Tabla con scroll horizontal */
   .table-wrap { overflow-x: auto; }
   table { min-width: 480px; }
-
-  /* Botón puerta: se achica en móvil, solo icono */
-  .back-btn-door {
-    top: 12px;
-    left: 12px;
-    padding: 8px 12px;
-  }
-  .door-label {
-    /* Ocultar el texto en pantallas muy pequeñas, dejar solo el icono */
-    display: none;
-  }
 }
 
 /* ── Mobile portrait (≤480px) ── */
