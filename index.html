@@ -414,6 +414,34 @@
     </div>
   </nav>
 
+    <!-- Bottom nav (solo visible en mobile ≤480px) -->
+  <nav class="sidebar-bottom-nav" aria-label="Navegación móvil" style="display:none">
+    <button class="nav-item active" id="bnav-dashboard" onclick="showPage('dashboard')">
+      <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
+      <span>Dashboard</span>
+    </button>
+    <button class="nav-item" id="bnav-visual" onclick="showPage('visual')">
+      <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+      <span>Buscar</span>
+    </button>
+    <button class="nav-item" id="bnav-results" onclick="navToResults()">
+      <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 20V10M6 20V4M18 20v-4"/></svg>
+      <span>Resultados</span>
+    </button>
+    <button class="nav-item" id="bnav-profile" onclick="showPage('profile')">
+      <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg>
+      <span>Perfil</span>
+    </button>
+    <button class="nav-item admin-nav" onclick="goAdminLogin()">
+      <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+      <span>Admin</span>
+    </button>
+    <button class="nav-item" onclick="logout()">
+      <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+      <span>Salir</span>
+    </button>
+  </nav>
+
   <!-- Main content: tabindex="-1" para que el skip link pueda enviar foco aquí -->
   <main class="main" id="main-content" tabindex="-1">
 
@@ -873,6 +901,34 @@
         <span>Cerrar Sesión</span>
       </button>
     </div>
+  </nav>
+
+  <!-- Bottom nav admin (solo visible en mobile ≤480px) -->
+  <nav class="sidebar-bottom-nav" aria-label="Navegación móvil administración" style="display:none">
+    <button class="nav-item active" id="bnav-overview" onclick="showAdminPage('overview')">
+      <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
+      <span>Overview</span>
+    </button>
+    <button class="nav-item" id="bnav-tiendas" onclick="showAdminPage('tiendas')">
+      <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+      <span>Tiendas</span>
+    </button>
+    <button class="nav-item" id="bnav-scraping" onclick="showAdminPage('scraping')">
+      <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
+      <span>Scraping</span>
+    </button>
+    <button class="nav-item" id="bnav-usuarios" onclick="showAdminPage('usuarios')">
+      <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+      <span>Usuarios</span>
+    </button>
+    <button class="nav-item" onclick="goUserMode()">
+      <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true"><polyline points="15 18 9 12 15 6"/></svg>
+      <span>Usuario</span>
+    </button>
+    <button class="nav-item" onclick="adminLogout()">
+      <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+      <span>Salir</span>
+    </button>
   </nav>
 
   <main class="main" aria-label="Contenido administrativo">
