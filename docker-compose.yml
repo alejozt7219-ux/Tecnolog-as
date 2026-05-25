@@ -1,5 +1,3 @@
-version: "3.9"
-
 services:
 
   postgres:
@@ -13,7 +11,7 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U pricevision"]
+      test: ["CMD-SHELL", "pg_isready -U pricevision -d pricevision_db"]
       interval: 5s
       timeout: 5s
       retries: 5
