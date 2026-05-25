@@ -4,7 +4,7 @@ from sqlalchemy import select
 from app.core.database import get_db
 from app.core.security import verify_password, create_access_token, create_refresh_token, decode_token, hash_password
 from app.core.deps import get_current_user
-from app.models.user import User
+from app.models.user import User, UserRole
 from app.schemas.auth import LoginRequest, TokenResponse, RefreshRequest, UserOut, UserCreate
 
 router = APIRouter(prefix="/auth", tags=["auth"])
@@ -24,7 +24,7 @@ async def register(body: UserCreate, db: AsyncSession = Depends(get_db)):
         name=body.name,
         email=body.email,
         hashed_password=hash_password(body.password),
-        role="analyst",  # registro público siempre crea analistas
+        role=UserRole.analyst,  # registro público siempre crea analistas
         is_active=True,
     )
     db.add(user)

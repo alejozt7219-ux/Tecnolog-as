@@ -19,9 +19,10 @@ def run_async(coro):
 
 
 @celery_app.task(bind=True, name="app.workers.tasks.scrape_product")
-def scrape_product(self, task_id: str, query: str, search_history_id: int):
+def scrape_product(self, task_id: str, query: str, search_history_id):
     """
     Tarea principal: corre todos los scrapers en paralelo y guarda resultados en DB.
+    search_history_id puede ser None cuando viene del daily scraping (no hay historial de usuario).
     """
     from app.core.database import AsyncSessionLocal
     from app.models.product import SearchHistory, Product, PriceResult, Store, TaskStatus
@@ -33,12 +34,10 @@ def scrape_product(self, task_id: str, query: str, search_history_id: int):
         scrapers = [AmazonScraper, MercadoLibreScraper, LinioScraper]
         all_results = []
 
-        # Corre scrapers concurrentemente
         async def scrape_one(ScraperClass):
             async with ScraperClass() as scraper:
                 return await scraper.safe_search(query)
 
-        import asyncio
         results_per_store = await asyncio.gather(
             *[scrape_one(S) for S in scrapers],
             return_exceptions=True,
@@ -49,15 +48,16 @@ def scrape_product(self, task_id: str, query: str, search_history_id: int):
                 all_results.extend(store_results)
 
         async with AsyncSessionLocal() as db:
-            # Actualiza el estado de la búsqueda
-            history = await db.get(SearchHistory, search_history_id)
-            if not history:
-                return
+            # Obtener historial solo si hay un ID real (no es tarea programada)
+            history = None
+            if search_history_id:
+                history = await db.get(SearchHistory, search_history_id)
 
             if not all_results:
-                history.status = TaskStatus.error
-                history.error_message = "No se encontraron resultados"
-                await db.commit()
+                if history:
+                    history.status = TaskStatus.error
+                    history.error_message = "No se encontraron resultados"
+                    await db.commit()
                 return
 
             # Crea o actualiza el producto
@@ -96,8 +96,10 @@ def scrape_product(self, task_id: str, query: str, search_history_id: int):
                 )
                 db.add(price_result)
 
-            history.status = TaskStatus.done
-            history.product_id = product.id
+            if history:
+                history.status = TaskStatus.done
+                history.product_id = product.id
+
             await db.commit()
             logger.info(f"[Task {task_id}] Completado. {len(all_results)} precios guardados.")
 
@@ -120,7 +122,7 @@ def run_daily_scraping():
             scrape_product.delay(
                 task_id=f"daily-{product.id}",
                 query=product.normalized_name,
-                search_history_id=0,
+                search_history_id=None,  # None = tarea programada, sin historial de usuario
             )
         logger.info(f"[Daily] Scraping lanzado para {len(products)} productos.")
 
