@@ -86,7 +86,7 @@ const ApiAuth = {
      El backend espera: name, email, password, role
      Por defecto el rol es "analyst" (único rol permitido desde el registro público) */
   async register({ name, email, password }) {
-    const data = await apiFetch('/admin/users', {
+    const data = await apiFetch('/auth/register', {
       method: 'POST',
       body: JSON.stringify({ name, email, password, role: 'analyst' }),
     });
