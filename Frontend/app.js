@@ -940,29 +940,63 @@ async function toggleUser(el, name) {
 async function runScraping() {
   showLoader('Ejecutando scraping manual…');
   try {
-    await ApiAdmin.triggerScraping();
+    const res = await ApiAdmin.triggerScraping();
     hideLoader();
     const now = new Date();
+
+    // Actualizar fecha en el panel admin
     const lastExec = document.getElementById('last-execution-date');
     if (lastExec) lastExec.textContent = now.toLocaleDateString('es-CO');
 
+    // Agregar fila al historial de scraping del admin
     const tbody = document.getElementById('scraping-history-tbody');
     if (tbody) {
       const row = document.createElement('tr');
       row.innerHTML = `
         <td><time>${now.toLocaleString('es-CO')}</time></td>
         <td><span class="status-badge s-green">Iniciado</span></td>
-        <td style="color:var(--muted)">—</td>
+        <td style="color:var(--muted)">${res.query || '—'}</td>
         <td>0</td>
         <td style="color:var(--muted)">En proceso…</td>
         <td><button class="link-btn" onclick="showToast('Logs','Abriendo logs…')">Ver logs</button></td>
       `;
       tbody.insertBefore(row, tbody.firstChild);
     }
-    showToast('Scraping iniciado', 'Las tareas fueron encoladas en Celery');
+
+    showToast('Scraping iniciado', `Buscando: ${res.query || 'producto demo'} 🔍`);
+
+    // Polling: esperar a que el task_id termine y refrescar el dashboard
+    _pollDashboardUpdate(res.task_id);
+
   } catch (err) {
     hideLoader();
     showToast('Error', err.message || 'No se pudo iniciar el scraping', true);
+  }
+}
+
+/* Espera hasta 60s a que el scraping termine y refresca el dashboard */
+async function _pollDashboardUpdate(taskId, attempts = 0) {
+  if (!taskId || attempts > 24) return; // máx ~60s
+  await new Promise(r => setTimeout(r, 2500));
+  try {
+    const result = await apiFetch(`/results/${taskId}`);
+    if (result.status === 'done') {
+      // Recargar historial — el nuevo producto ya está en BD
+      const history = await ApiScan.getHistory(1, 5);
+      if (history?.length) _renderDashboardHistory(history);
+      showToast('¡Listo!', `Precios de "${result.product?.name || taskId}" actualizados 🎉`);
+      // Actualizar también el historial de scraping en el panel admin
+      await _loadAdminScraping();
+      return;
+    }
+    if (result.status === 'error') {
+      showToast('Scraping falló', result.error || 'Error desconocido', true);
+      return;
+    }
+    // Sigue pendiente/processing — reintentar
+    _pollDashboardUpdate(taskId, attempts + 1);
+  } catch (_) {
+    _pollDashboardUpdate(taskId, attempts + 1);
   }
 }
 

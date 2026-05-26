@@ -237,10 +237,32 @@ async def scraping_status(
 
 
 @router.post("/scraping/trigger")
-async def trigger_scraping(_: User = Depends(require_admin)):
-    from app.workers.tasks import run_daily_scraping
-    run_daily_scraping.delay()
-    return {"message": "Scraping iniciado", "task_id": str(uuid.uuid4())}
+async def trigger_scraping(
+    db: AsyncSession = Depends(get_db),
+    admin: User = Depends(require_admin),
+):
+    import random, uuid as _uuid
+    from app.workers.tasks import scrape_product, DEMO_PRODUCTS
+    from app.models.product import SearchHistory, TaskStatus
+
+    query   = random.choice(DEMO_PRODUCTS)
+    task_id = str(_uuid.uuid4())
+
+    # Crear el historial asociado al admin que disparó el scraping
+    history = SearchHistory(
+        user_id=admin.id,
+        task_id=task_id,
+        query=query,
+        status=TaskStatus.pending,
+    )
+    db.add(history)
+    await db.commit()
+    await db.refresh(history)
+
+    # Encolar en Celery
+    scrape_product.delay(task_id=task_id, query=query, search_history_id=history.id)
+
+    return {"message": "Scraping manual iniciado", "task_id": task_id, "query": query}
 
 
 @router.get("/scraping/logs", response_model=list[ScrapingLogOut])

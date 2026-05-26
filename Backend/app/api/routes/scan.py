@@ -148,7 +148,11 @@ async def get_history(
     result = await db.execute(
         select(SearchHistory)
         .where(SearchHistory.user_id == current_user.id)
-        .options(selectinload(SearchHistory.product))
+        .options(
+            selectinload(SearchHistory.product)
+            .selectinload(Product.prices)
+            .selectinload(PriceResult.store)
+        )
         .order_by(SearchHistory.created_at.desc())
         .offset(offset)
         .limit(limit)

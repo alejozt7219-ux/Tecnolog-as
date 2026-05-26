@@ -1,5 +1,6 @@
 import asyncio
 import logging
+import random
 from app.workers.celery_app import celery_app
 from app.scraper.amazon import AmazonScraper
 from app.scraper.mercadolibre import MercadoLibreScraper
@@ -7,6 +8,23 @@ from app.scraper.falabella import FalabellaScraper
 from app.scraper.exito import ExitoScraper
 
 logger = logging.getLogger(__name__)
+
+# Scrapers disponibles con su nombre de tienda para matchear con la BD
+SCRAPER_MAP = {
+    "Amazon":        AmazonScraper,
+    "MercadoLibre":  MercadoLibreScraper,
+    "Falabella":     FalabellaScraper,
+    "Exito":         ExitoScraper,
+}
+
+# Productos de demo para scraping manual desde el panel admin
+DEMO_PRODUCTS = [
+    "Audifonos Lenovo LP40",
+    "Asus TUF A15",
+    "iPhone 17 Pro Max",
+    "Samsung Galaxy S26",
+    "Mando inalambrico Xbox Series X",
+]
 
 
 def run_async(coro):
@@ -20,46 +38,62 @@ def run_async(coro):
         asyncio.set_event_loop(None)
 
 
+def _get_active_scrapers(db):
+    """Devuelve solo los scrapers cuya tienda esté activa en la BD."""
+    from sqlalchemy import select
+    from app.models.product import Store
+
+    active_stores = db.execute(
+        select(Store.name).where(Store.is_active == True)
+    ).scalars().all()
+
+    # Normalizar nombres para comparar (ignorar mayúsculas/tildes)
+    active_lower = {s.lower() for s in active_stores}
+
+    selected = []
+    for store_name, ScraperClass in SCRAPER_MAP.items():
+        if store_name.lower() in active_lower:
+            selected.append(ScraperClass)
+
+    # Si no hay ninguna tienda en la BD todavía, usar todas (modo inicial)
+    return selected if selected else list(SCRAPER_MAP.values())
+
+
 @celery_app.task(bind=True, name="app.workers.tasks.scrape_product")
 def scrape_product(self, task_id: str, query: str, search_history_id):
-    from sqlalchemy import create_engine, select, text
+    from sqlalchemy import create_engine, select
     from sqlalchemy.orm import Session
     from app.models.product import SearchHistory, Product, PriceResult, Store, TaskStatus
     from app.core.config import settings
     import unicodedata
     import re
 
-    # Usar URL síncrona (psycopg2) en vez de asyncpg
     sync_url = settings.DATABASE_URL.replace("postgresql+asyncpg://", "postgresql+psycopg2://")
     engine = create_engine(sync_url)
 
-    async def _scrape():
-        scrapers = [AmazonScraper, MercadoLibreScraper, FalabellaScraper, ExitoScraper]
-        all_results = []
-
-        async def scrape_one(ScraperClass):
-            async with ScraperClass() as scraper:
-                return await scraper.safe_search(query)
-
-        results_per_store = await asyncio.gather(
-            *[scrape_one(S) for S in scrapers],
-            return_exceptions=True,
-        )
-
-        for store_results in results_per_store:
-            if isinstance(store_results, list):
-                all_results.extend(store_results)
-
-        return all_results
-
-    # Correr el scraping async
-    all_results = run_async(_scrape())
-
-    # Guardar en DB de forma síncrona
     with Session(engine) as db:
-        history = None
-        if search_history_id:
-            history = db.get(SearchHistory, search_history_id)
+        # Obtener solo scrapers de tiendas activas
+        active_scrapers = _get_active_scrapers(db)
+
+        async def _scrape():
+            async def scrape_one(ScraperClass):
+                async with ScraperClass() as scraper:
+                    return await scraper.safe_search(query)
+
+            results_per_store = await asyncio.gather(
+                *[scrape_one(S) for S in active_scrapers],
+                return_exceptions=True,
+            )
+
+            all_results = []
+            for store_results in results_per_store:
+                if isinstance(store_results, list):
+                    all_results.extend(store_results)
+            return all_results
+
+        all_results = run_async(_scrape())
+
+        history = db.get(SearchHistory, search_history_id) if search_history_id else None
 
         if not all_results:
             if history:
@@ -113,6 +147,7 @@ def scrape_product(self, task_id: str, query: str, search_history_id):
 
 @celery_app.task(name="app.workers.tasks.run_daily_scraping")
 def run_daily_scraping():
+    """Scraping diario de todos los productos existentes, respetando tiendas activas."""
     from sqlalchemy import create_engine, select
     from sqlalchemy.orm import Session
     from app.models.product import Product
@@ -132,3 +167,53 @@ def run_daily_scraping():
         )
     logger.info(f"[Daily] Scraping lanzado para {len(products)} productos.")
     engine.dispose()
+
+
+@celery_app.task(name="app.workers.tasks.run_manual_scraping")
+def run_manual_scraping():
+    """
+    Scraping manual desde el panel admin.
+    Elige un producto aleatorio de DEMO_PRODUCTS, lo scrapea en tiendas activas
+    y lo guarda en el historial de un usuario admin para que aparezca en el dashboard.
+    """
+    from sqlalchemy import create_engine, select
+    from sqlalchemy.orm import Session
+    from app.models.product import SearchHistory, TaskStatus
+    from app.models.user import User, UserRole
+    from app.core.config import settings
+    import uuid
+
+    sync_url = settings.DATABASE_URL.replace("postgresql+asyncpg://", "postgresql+psycopg2://")
+    engine = create_engine(sync_url)
+
+    query = random.choice(DEMO_PRODUCTS)
+    task_id = str(uuid.uuid4())
+
+    with Session(engine) as db:
+        # Asociar al primer admin disponible para que aparezca en su historial
+        admin = db.execute(
+            select(User).where(User.role == UserRole.admin, User.is_active == True)
+        ).scalar_one_or_none()
+
+        if not admin:
+            logger.warning("[Manual] No hay admin activo para asociar el scraping.")
+            engine.dispose()
+            return {"task_id": task_id, "query": query, "status": "no_admin"}
+
+        history = SearchHistory(
+            user_id=admin.id,
+            task_id=task_id,
+            query=query,
+            status=TaskStatus.pending,
+        )
+        db.add(history)
+        db.commit()
+        db.refresh(history)
+        history_id = history.id
+
+    engine.dispose()
+
+    # Lanzar el scraping real
+    scrape_product.delay(task_id=task_id, query=query, search_history_id=history_id)
+    logger.info(f"[Manual] Scraping lanzado para '{query}' (task_id={task_id})")
+    return {"task_id": task_id, "query": query}
