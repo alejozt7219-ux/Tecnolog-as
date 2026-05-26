@@ -182,6 +182,16 @@ async function doLogin() {
   try {
     await ApiAuth.login(email, pass);
     currentUser = await ApiAuth.me();
+
+    // Verificar si el usuario está desactivado
+    if (!currentUser.is_active) {
+      hideLoader();
+      showFieldError('email-input', 'email-error', 'Tu usuario ha sido desactivado. Contáctanos para más información.');
+      ApiAuth.logout();
+      currentUser = null;
+      return;
+    }
+
     _applyUserToUI(currentUser);
     hideLoader();
 
@@ -737,6 +747,14 @@ function _renderStoresTable(stores) {
   const tbody = document.getElementById('stores-tbody');
   if (!tbody || !stores?.length) return;
   tbody.innerHTML = '';
+  // Deduplicar por nombre — mostrar solo la primera ocurrencia
+  const seen = new Set();
+  stores = stores.filter(s => {
+    const key = s.name.toLowerCase().replace(/\s/g, '');
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
   stores.forEach(store => {
     const row = document.createElement('tr');
     row.dataset.storeId = store.id;
@@ -746,7 +764,7 @@ function _renderStoresTable(stores) {
     const safeN = store.name.replace(/'/g, "\\'");
     row.innerHTML = `
       <td style="font-weight:500">${store.name}</td>
-      <td style="color:var(--muted);font-size:12px">${store.base_url}</td>
+      <td style="color:var(--muted);font-size:12px">${(() => { try { const u = new URL(store.base_url); return u.origin; } catch(_) { return store.base_url; } })()}</td>
       <td><span class="status-badge ${sc}">${st}</span></td>
       <td style="color:var(--muted)">—</td>
       <td>—</td>
@@ -792,11 +810,18 @@ function _renderUsersTable(users) {
       <td><span class="role-badge ${role}">${roleL}</span></td>
       <td><span class="status-badge ${sc}">${st}</span></td>
       <td style="font-size:12px;color:var(--muted)">${dateStr}</td>
-      <td><label class="toggle" aria-label="Activar o desactivar a ${user.name}">
-        <input type="checkbox" role="switch" aria-checked="${user.is_active}" ${user.is_active ? 'checked' : ''}
-          onchange="toggleUser(this,'${safeN}');this.setAttribute('aria-checked',this.checked)">
-        <span class="toggle-slider" aria-hidden="true"></span>
-      </label></td>
+      <td>
+        <div style="display:flex;align-items:center;justify-content:center;gap:8px">
+          <label class="toggle" style="background:var(--card2);padding:4px 8px;border-radius:8px;border:1px solid var(--border)" aria-label="Activar o desactivar a ${user.name}">
+            <input type="checkbox" role="switch" aria-checked="${user.is_active}" ${user.is_active ? 'checked' : ''}
+              onchange="toggleUser(this,'${safeN}');this.setAttribute('aria-checked',this.checked)">
+            <span class="toggle-slider" aria-hidden="true"></span>
+          </label>
+          <button class="icon-btn icon-btn--danger" data-tooltip="Eliminar usuario" aria-label="Eliminar usuario" onclick="deleteUser(this,'${safeN}')">
+            <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4h6v2"/></svg>
+          </button>
+        </div>
+      </td>
     `;
     tbody.appendChild(tr);
   });
@@ -807,6 +832,12 @@ async function _loadAdminScraping() {
   try {
     const logs = await ApiAdmin.getScrapingLogs(1);
     if (logs?.length) _renderScrapingLogs(logs);
+    // Mostrar/ocultar botón reset según si hay scrapings manuales del admin
+    const resetBtn = document.getElementById('btn-reset-demo');
+    if (resetBtn) {
+      const hasManual = logs?.some(l => l.query);
+      resetBtn.style.display = hasManual ? 'inline-flex' : 'none';
+    }
   } catch (_) {}
 }
 
@@ -835,14 +866,57 @@ function _renderScrapingLogs(logs) {
 /* ── Admin overview: stats reales ─────────────── */
 async function _loadAdminOverview() {
   try {
-    const data = await ApiAdmin.getOverview();
+    const [data, logs] = await Promise.all([
+      ApiAdmin.getOverview(),
+      ApiAdmin.getScrapingLogs(1).catch(() => []),
+    ]);
     countTo('acnt-products',  data.searches?.total    || 0, 1000);
     countTo('acnt-users',     data.users?.total        || 0, 1000);
     countTo('acnt-stores',    data.stores?.active      || 0, 1000);
     countTo('acnt-completed', data.searches?.completed || 0, 1000);
+
+    // Cards del overview hardcodeados → ahora con datos reales
+    const storesRatio = document.getElementById('acnt-stores-ratio');
+    if (storesRatio) storesRatio.textContent = `${data.stores?.active || 0}/${data.stores?.total || 0}`;
+
+    const lastExecCard = document.getElementById('acnt-last-exec');
+    if (lastExecCard && data.scraping?.last_run) {
+      lastExecCard.textContent = new Date(data.scraping.last_run).toLocaleTimeString('es-CO', {hour:'2-digit', minute:'2-digit'});
+    }
+    const lastStatusCard = document.getElementById('acnt-last-status');
+    if (lastStatusCard && data.scraping?.last_status) {
+      const isDone = data.scraping.last_status === 'done';
+      lastStatusCard.textContent = isDone ? 'Completado' : 'Error';
+      lastStatusCard.className = `status-badge ${isDone ? 's-green' : 's-red'}`;
+    }
+    const errCard = document.getElementById('acnt-errors');
+    if (errCard) errCard.textContent = data.scraping?.error_count ?? '—';
+
+    // last-execution-date en scraping también
     const lastExec = document.getElementById('last-execution-date');
     if (lastExec && data.scraping?.last_run) {
       lastExec.textContent = new Date(data.scraping.last_run).toLocaleDateString('es-CO');
+    }
+    // Llenar tabla de actividad reciente con datos reales
+    const tbody = document.querySelector('#admin-page-overview .table-wrap tbody');
+    if (tbody && logs?.length) {
+      tbody.innerHTML = '';
+      logs.slice(0, 5).forEach(log => {
+        const sc = log.status === 'done' ? 's-green' : log.status === 'error' ? 's-red' : 's-yellow';
+        const st = log.status === 'done' ? 'Exitoso' : log.status === 'error' ? 'Error' : 'En proceso';
+        const desc = log.query
+          ? `Scraping manual: ${log.query}`
+          : `Scraping automático completado`;
+        const dateStr = new Date(log.created_at).toLocaleString('es-CO');
+        tbody.insertAdjacentHTML('beforeend', `
+          <tr>
+            <td><div class="act-icon" aria-hidden="true"><svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg></div></td>
+            <td>${desc}</td>
+            <td style="color:var(--muted)">Scraping</td>
+            <td style="color:var(--muted)"><time>${dateStr}</time></td>
+            <td><span class="status-badge ${sc}">${st}</span></td>
+          </tr>`);
+      });
     }
   } catch (_) {
     countTo('acnt-products', 0, 600);
@@ -911,6 +985,23 @@ function toggleStore(el, name) {
 }
 
 /* ── Admin: toggle usuario REAL ─────────────────── */
+async function deleteUser(btn, name) {
+  if (!confirm(`¿Eliminar a ${name}? Esta acción no se puede deshacer.`)) return;
+  const tr = btn.closest('tr');
+  const userId = tr?.dataset.userId;
+  if (!userId) return;
+  try {
+    await ApiAdmin.deleteUser(userId);
+    tr.style.transition = 'opacity .3s,transform .3s';
+    tr.style.opacity = '0';
+    tr.style.transform = 'translateX(20px)';
+    setTimeout(() => tr.remove(), 320);
+    showToast('Usuario eliminado', `${name} fue eliminado del sistema`);
+  } catch (err) {
+    showToast('Error', err.message || 'No se pudo eliminar', true);
+  }
+}
+
 async function toggleUser(el, name) {
   const row    = el.closest('tr');
   const badge  = row?.querySelector('.status-badge');
@@ -937,6 +1028,20 @@ async function toggleUser(el, name) {
 }
 
 /* ── Admin: scraping manual REAL ─────────────────── */
+async function resetDemoProducts() {
+  if (!confirm('¿Restablecer los productos predeterminados? Esto eliminará el historial de scrapings manuales.')) return;
+  showLoader('Restableciendo productos…');
+  try {
+    await ApiAdmin.resetDemoProducts();
+    hideLoader();
+    showToast('Productos restablecidos', 'Los 5 productos predeterminados están listos');
+    await _loadAdminScraping();
+  } catch (err) {
+    hideLoader();
+    showToast('Error', err.message || 'No se pudo restablecer', true);
+  }
+}
+
 async function runScraping() {
   showLoader('Ejecutando scraping manual…');
   try {
@@ -950,18 +1055,22 @@ async function runScraping() {
 
     // Agregar fila al historial de scraping del admin
     const tbody = document.getElementById('scraping-history-tbody');
+    const startTime = Date.now();
     if (tbody) {
       const row = document.createElement('tr');
+      row.dataset.taskId = res.task_id;
       row.innerHTML = `
         <td><time>${now.toLocaleString('es-CO')}</time></td>
-        <td><span class="status-badge s-green">Iniciado</span></td>
+        <td><span class="status-badge s-yellow">En proceso…</span></td>
         <td style="color:var(--muted)">${res.query || '—'}</td>
-        <td>0</td>
-        <td style="color:var(--muted)">En proceso…</td>
+        <td>—</td>
+        <td style="color:var(--muted)">—</td>
         <td><button class="link-btn" onclick="showToast('Logs','Abriendo logs…')">Ver logs</button></td>
       `;
       tbody.insertBefore(row, tbody.firstChild);
     }
+    window._scrapingStartTimes = window._scrapingStartTimes || {};
+    window._scrapingStartTimes[res.task_id] = startTime;
 
     showToast('Scraping iniciado', `Buscando: ${res.query || 'producto demo'} 🔍`);
 
@@ -981,15 +1090,26 @@ async function _pollDashboardUpdate(taskId, attempts = 0) {
   try {
     const result = await apiFetch(`/results/${taskId}`);
     if (result.status === 'done') {
+      // Actualizar la fila de la tabla de scraping admin con duración real
+      const row = document.querySelector(`tr[data-task-id="${taskId}"]`);
+      if (row) {
+        const startTime = window._scrapingStartTimes?.[taskId] || Date.now();
+        const durSecs = Math.round((Date.now() - startTime) / 1000);
+        const durStr = durSecs >= 60 ? `${Math.floor(durSecs/60)}m ${durSecs%60}s` : `${durSecs}s`;
+        const priceCount = result.product?.prices?.length || 0;
+        row.cells[1].innerHTML = '<span class="status-badge s-green">Completado</span>';
+        row.cells[3].textContent = priceCount;
+        row.cells[4].textContent = durStr;
+      }
       // Recargar historial — el nuevo producto ya está en BD
       const history = await ApiScan.getHistory(1, 5);
       if (history?.length) _renderDashboardHistory(history);
       showToast('¡Listo!', `Precios de "${result.product?.name || taskId}" actualizados 🎉`);
-      // Actualizar también el historial de scraping en el panel admin
-      await _loadAdminScraping();
       return;
     }
     if (result.status === 'error') {
+      const row = document.querySelector(`tr[data-task-id="${taskId}"]`);
+      if (row) row.cells[1].innerHTML = '<span class="status-badge s-red">Error</span>';
       showToast('Scraping falló', result.error || 'Error desconocido', true);
       return;
     }
@@ -1015,6 +1135,12 @@ function _applyUserToUI(user) {
   if (profileName)  profileName.value  = user.name;
   if (profileEmail) profileEmail.value = user.email;
   if (profileRole)  profileRole.value  = user.role === 'admin' ? 'Administrador' : 'Analista';
+  // Miembro desde — usar created_at real del usuario
+  const memberSince = document.getElementById('member-since');
+  if (memberSince && user.created_at) {
+    const year = new Date(user.created_at).getFullYear();
+    memberSince.textContent = `Miembro desde ${year}`;
+  }
   const adminBtn = document.getElementById('admin-btn');
   if (adminBtn) adminBtn.style.display = user.role === 'admin' ? 'flex' : 'none';
 }

@@ -159,6 +159,8 @@ const ApiScan = {
 const ApiAdmin = {
   // Overview
   async getOverview()           { return apiFetch('/admin/overview'); },
+  async resetDemoProducts()     { return apiFetch('/admin/scraping/reset-demo', { method: 'POST' }); },
+  async fixDefaultStores()      { return apiFetch('/admin/stores/fix-defaults', { method: 'POST' }); },
 
   // Usuarios
   async getUsers()              { return apiFetch('/admin/users'); },

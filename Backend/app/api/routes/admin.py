@@ -265,6 +265,85 @@ async def trigger_scraping(
     return {"message": "Scraping manual iniciado", "task_id": task_id, "query": query}
 
 
+@router.post("/stores/fix-defaults", status_code=200)
+async def fix_default_stores(
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(require_admin),
+):
+    """Limpia tiendas duplicadas/incorrectas y deja las 4 correctas."""
+    from app.models.product import Store
+
+    CORRECT = {
+        "Falabella":    "https://www.falabella.com.co",
+        "MercadoLibre": "https://www.mercadolibre.com.co",
+        "Alkosto":      "https://www.alkosto.com",
+        "Exito":        "https://www.exito.com",
+    }
+
+    # Eliminar tiendas incorrectas: Linio, duplicados MercadoLibre, Éxito con URL larga
+    result = await db.execute(select(Store))
+    all_stores = result.scalars().all()
+
+    seen = set()
+    for store in all_stores:
+        name_key = store.name.lower().replace(" ", "").replace("é", "e").replace("é", "e")
+        # Borrar Linio
+        if "linio" in name_key:
+            await db.delete(store)
+            continue
+        # Borrar duplicados MercadoLibre (queda solo el primero)
+        if "mercadolibre" in name_key or "mercado libre" in name_key.replace("mercadolibre",""):
+            if "mercadolibre" in seen:
+                await db.delete(store)
+                continue
+            seen.add("mercadolibre")
+        # Arreglar URL de Éxito
+        if "exito" in name_key or "éxito" in store.name.lower():
+            store.base_url = "https://www.exito.com"
+        # Arreglar URL de MercadoLibre si tiene path
+        if ("mercadolibre" in name_key) and len(store.base_url) > 35:
+            store.base_url = "https://www.mercadolibre.com.co"
+        # Reemplazar Linio por Alkosto si existe con ese nombre
+        if store.name == "Alkosto":
+            store.base_url = "https://www.alkosto.com"
+
+    # Crear Alkosto si no existe
+    alkosto = await db.execute(select(Store).where(Store.name == "Alkosto"))
+    if not alkosto.scalar_one_or_none():
+        db.add(Store(name="Alkosto", base_url="https://www.alkosto.com", is_active=True))
+
+    await db.commit()
+    return {"message": "Tiendas actualizadas correctamente"}
+
+
+@router.post("/scraping/reset-demo", status_code=200)
+async def reset_demo_products(
+    db: AsyncSession = Depends(get_db),
+    admin: User = Depends(require_admin),
+):
+    """Elimina el historial de scrapings manuales del admin y deja los productos demo listos."""
+    from app.models.product import SearchHistory, Product
+    import unicodedata, re
+
+    DEMO_PRODUCTS = [
+        "Audifonos Lenovo LP40",
+        "Asus TUF A15",
+        "iPhone 17 Pro Max",
+        "Samsung Galaxy S26",
+        "Mando inalambrico Xbox Series X",
+    ]
+
+    # Eliminar historial manual del admin
+    result = await db.execute(
+        select(SearchHistory).where(SearchHistory.user_id == admin.id)
+    )
+    for h in result.scalars().all():
+        await db.delete(h)
+
+    await db.commit()
+    return {"message": "Historial restablecido", "demo_products": DEMO_PRODUCTS}
+
+
 @router.get("/scraping/logs", response_model=list[ScrapingLogOut])
 async def scraping_logs(
     page: int = Query(1, ge=1),

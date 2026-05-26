@@ -272,8 +272,10 @@
           <label for="reg-role">Rol <span class="required-mark" aria-hidden="true">*</span></label>
           <select id="reg-role" name="role" required aria-required="true" aria-invalid="false">
             <option value="">Selecciona tu rol</option>
-            <option value="analyst">Analista</option>
-            <option value="admin">Administrador</option>
+            <option value="Analista">Analista</option>
+            <option value="Comprador">Comprador</option>
+            <option value="Gerente">Gerente</option>
+            <option value="Otro">Otro</option>
           </select>
           <span id="reg-role-error" class="field-error" role="alert" aria-live="polite" hidden></span>
         </div>
@@ -808,7 +810,7 @@
           <p class="profile-name" id="user-display-name">Carlos Rodríguez</p>
           <div class="profile-badges" aria-label="Rol y antigüedad">
             <span class="badge badge-purple" id="user-role-badge">Analista Senior</span>
-            <span class="badge badge-muted">Miembro desde 2024</span>
+            <span class="badge badge-muted" id="member-since">Miembro desde 2024</span>
           </div>
         </div>
       </div>
@@ -1032,13 +1034,13 @@
       <ul class="stats-grid" role="list" aria-label="Métricas del sistema">
         <li class="stat-card stagger-1" role="listitem">
           <div class="stat-label">Total tiendas activas</div>
-          <div class="stat-val">4/5</div>
+          <div class="stat-val" id="acnt-stores-ratio">4/5</div>
           <span class="stat-tag tag-blue">Tiendas</span>
         </li>
         <li class="stat-card stagger-2" role="listitem">
           <div class="stat-label">Última ejecución scraping</div>
-          <div class="stat-val">08:30</div>
-          <span class="status-badge s-green">Completado</span>
+          <div class="stat-val" id="acnt-last-exec" style="font-size:20px">08:30</div>
+          <span class="status-badge s-green" id="acnt-last-status">Completado</span>
         </li>
         <li class="stat-card stagger-3" role="listitem">
           <div class="stat-label">Productos normalizados</div>
@@ -1047,7 +1049,7 @@
         </li>
         <li class="stat-card stagger-4" role="listitem">
           <div class="stat-label">Errores recientes</div>
-          <div class="stat-val" style="color:var(--red)">18</div>
+          <div class="stat-val" id="acnt-errors" style="color:var(--red)">—</div>
           <span class="stat-tag s-red">Últimas 5 ejec.</span>
         </li>
       </ul>
@@ -1225,6 +1227,9 @@
           <h1 class="page-title" id="admin-scraping-title">Gestión de Scraping</h1>
           <p class="page-sub">Monitorea y controla las ejecuciones de scraping</p>
         </div>
+        <button id="btn-reset-demo" class="btn-sm btn-secondary-sm" style="margin-right:8px;display:none" onclick="resetDemoProducts()">
+          ↺ Restablecer productos
+        </button>
         <button class="btn-sm" onclick="runScraping()">
           ↺ Ejecutar scraping manual
         </button>
