@@ -59,7 +59,7 @@ async def refresh(body: RefreshRequest, db: AsyncSession = Depends(get_db)):
     if not payload or payload.get("type") != "refresh":
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Refresh token inválido")
 
-    result = await db.execute(select(User).where(User.id == payload["sub"]))
+    result = await db.execute(select(User).where(User.id == int(payload["sub"])))
     user = result.scalar_one_or_none()
     if not user or not user.is_active:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Usuario no encontrado")

@@ -482,7 +482,62 @@
         </li>
       </ul>
 
-      <h2 class="section-title">Búsquedas recientes</h2>
+      <!-- ── CHART DE TENDENCIA ── -->
+      <div class="chart-section">
+        <div class="chart-card">
+          <div class="chart-header">
+            <div>
+              <div class="chart-title">Tendencia de precios</div>
+              <div class="chart-sub">Comparación por tienda — últimas 7 búsquedas</div>
+            </div>
+            <div class="chart-legend" id="chart-legend">
+              <div class="legend-item"><span class="legend-dot" style="background:#7c6fff"></span>Falabella</div>
+              <div class="legend-item"><span class="legend-dot" style="background:#22d98e"></span>Mercado Libre</div>
+              <div class="legend-item"><span class="legend-dot" style="background:#ff5a5a"></span>Éxito</div>
+              <div class="legend-item"><span class="legend-dot" style="background:#ffb347"></span>Amazon</div>
+            </div>
+          </div>
+          <div class="chart-wrap">
+            <div class="chart-tooltip" id="chart-tooltip">
+              <div class="chart-tooltip-store" id="tooltip-store"></div>
+              <div class="chart-tooltip-price" id="tooltip-price"></div>
+            </div>
+            <svg id="price-chart-svg" viewBox="0 0 700 200" preserveAspectRatio="none" aria-label="Gráfico de tendencia de precios por tienda">
+              <defs>
+                <linearGradient id="grad-accent" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stop-color="#7c6fff" stop-opacity="0.3"/>
+                  <stop offset="100%" stop-color="#7c6fff" stop-opacity="0"/>
+                </linearGradient>
+                <linearGradient id="grad-green" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stop-color="#22d98e" stop-opacity="0.3"/>
+                  <stop offset="100%" stop-color="#22d98e" stop-opacity="0"/>
+                </linearGradient>
+              </defs>
+              <!-- Grid lines -->
+              <g id="chart-grid" stroke="rgba(255,255,255,0.05)" stroke-width="1">
+                <line x1="0" y1="0"   x2="700" y2="0"/>
+                <line x1="0" y1="50"  x2="700" y2="50"/>
+                <line x1="0" y1="100" x2="700" y2="100"/>
+                <line x1="0" y1="150" x2="700" y2="150"/>
+                <line x1="0" y1="200" x2="700" y2="200"/>
+              </g>
+              <!-- Y-axis labels -->
+              <g id="chart-labels" fill="rgba(136,136,153,0.7)" font-size="10" font-family="Space Grotesk, sans-serif"></g>
+              <!-- Lines rendered by JS -->
+              <g id="chart-lines"></g>
+              <!-- Dots rendered by JS -->
+              <g id="chart-dots"></g>
+              <!-- X-axis labels -->
+              <g id="chart-xlabels" fill="rgba(136,136,153,0.7)" font-size="10" font-family="Space Grotesk, sans-serif"></g>
+            </svg>
+          </div>
+        </div>
+      </div>
+
+      <div class="section-header">
+        <h2 class="section-title">Búsquedas recientes</h2>
+        <button class="btn-sm" onclick="showPage('visual')">+ Nueva búsqueda</button>
+      </div>
       <div class="table-wrap" role="region" aria-label="Historial de búsquedas recientes">
         <table>
           <caption class="sr-only">Historial de las últimas búsquedas realizadas</caption>
@@ -501,14 +556,14 @@
               <td><time datetime="2026-02-25T10:30">25/02/2026 10:30</time></td>
               <td class="price-val">$79.990</td>
               <td>5 tiendas</td>
-              <td><button class="link-btn" onclick="goResults('Nike Air Max')">Ver Detalles</button></td>
+              <td><button class="link-btn" onclick="goResults('Nike Air Max', 'nike-air-max')">Ver Detalles</button></td>
             </tr>
             <tr>
               <td>Auriculares inalámbricos Sony</td>
               <td><time datetime="2026-02-24T15:45">24/02/2026 15:45</time></td>
               <td class="price-val">$189.990</td>
               <td>4 tiendas</td>
-              <td><button class="link-btn" onclick="goResults('Auriculares Sony', 'sony')">Ver Detalles</button></td>
+              <td><button class="link-btn" onclick="goResults('Auriculares Sony', 'auriculares-sony')">Ver Detalles</button></td>
             </tr>
             <tr>
               <td>Mochila portátil impermeable</td>
@@ -522,7 +577,7 @@
               <td><time datetime="2026-02-22T14:10">22/02/2026 14:10</time></td>
               <td class="price-val">$149.990</td>
               <td>5 tiendas</td>
-              <td><button class="link-btn" onclick="goResults('Smartwatch Samsung', 'samsung')">Ver Detalles</button></td>
+              <td><button class="link-btn" onclick="goResults('Smartwatch Samsung', 'samsung-galaxy')">Ver Detalles</button></td>
             </tr>
             <tr>
               <td>Cafetera automática Nespresso</td>
@@ -590,51 +645,70 @@
           </button>
         </figure>
 
-        <!-- Widget: tarjeta de atributos con dl semántico -->
-        <article class="attrs-card stagger-1" aria-label="Atributos reconocidos del producto por IA">
+        <!-- Estado: cargando atributos (skeleton) -->
+        <div class="attrs-loading" id="attrs-skeleton" style="display:none" aria-live="polite" aria-label="Analizando imagen con IA">
+          <div class="attrs-loading-label">Analizando imagen con IA…</div>
+          <div class="skeleton skeleton-line w80 h24"></div>
+          <div class="skeleton skeleton-line w60"></div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:4px">
+            <div class="skeleton skeleton-line" style="width:80px;height:28px;border-radius:100px"></div>
+            <div class="skeleton skeleton-line" style="width:60px;height:28px;border-radius:100px"></div>
+            <div class="skeleton skeleton-line" style="width:70px;height:28px;border-radius:100px"></div>
+            <div class="skeleton skeleton-line" style="width:50px;height:28px;border-radius:100px"></div>
+          </div>
+        </div>
+
+        <!-- Widget: tarjeta de atributos dinámica -->
+        <article class="attrs-card stagger-1" id="attrs-card" aria-label="Atributos reconocidos del producto por IA" style="display:none">
           <h2 class="attrs-title">
             <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" focusable="false" aria-hidden="true"><path d="M9 3H5a2 2 0 0 0-2 2v4"/><path d="M15 3h4a2 2 0 0 1 2 2v4"/><path d="M9 21H5a2 2 0 0 1-2-2v-4"/><path d="M15 21h4a2 2 0 0 0 2-2v-4"/></svg>
             Atributos reconocidos
           </h2>
-          <!-- dl semántico para pares término-definición -->
-          <dl class="attrs-grid">
-            <div class="attr-item">
-              <dt>Categoría</dt>
-              <dd>Calzado deportivo</dd>
-            </div>
-            <div class="attr-item">
-              <dt>Color</dt>
-              <dd>Negro/Blanco</dd>
-            </div>
-            <div class="attr-item">
-              <dt>Marca aproximada</dt>
-              <dd>Nike (aproximado)</dd>
-            </div>
-            <div class="attr-item">
-              <dt>Estilo</dt>
-              <dd>Casual deportivo</dd>
-            </div>
-          </dl>
+          <dl class="attrs-grid" id="attrs-dl"></dl>
           <h3 class="attrs-title" style="margin-bottom:10px">Palabras clave generadas</h3>
-          <!-- ul semántico para lista de keywords -->
-          <ul class="kw-list" aria-label="Palabras clave generadas para la búsqueda">
-            <li class="kw">zapatillas deportivas</li>
-            <li class="kw">running</li>
-            <li class="kw">casual</li>
-            <li class="kw">negro</li>
-            <li class="kw">blanco</li>
-            <li class="kw">nike</li>
-            <li class="kw">air max</li>
-          </ul>
+          <ul class="kw-list" id="kw-list" aria-label="Palabras clave generadas para la búsqueda"></ul>
+          <div class="attrs-confidence" id="attrs-confidence" style="display:none">
+            <span>Confianza IA</span>
+            <div class="confidence-bar"><div class="confidence-fill" id="confidence-fill" style="width:0%"></div></div>
+            <span id="confidence-pct"></span>
+          </div>
         </article>
 
+        <!-- Estado: aún no analizado (primera vez que se carga imagen) -->
+        <article class="attrs-card stagger-1" id="attrs-placeholder" aria-label="Imagen lista para analizar">
+          <div style="text-align:center;padding:16px 0">
+            <div style="font-size:32px;margin-bottom:10px">🔍</div>
+            <div style="font-family:var(--font-head);font-weight:600;margin-bottom:6px">Imagen cargada</div>
+            <div style="font-size:12px;color:var(--muted)">Presiona "Analizar Precios" para identificar el producto y comparar precios en múltiples tiendas</div>
+          </div>
+        </article>
+
+        <!-- Progreso del análisis -->
+        <div class="analysis-progress" id="analysis-progress" aria-live="polite">
+          <div class="progress-steps" id="progress-steps">
+            <div class="progress-step" id="step-vision">
+              <div class="step-icon">1</div>
+              <span>Identificando producto con visión IA</span>
+            </div>
+            <div class="progress-step" id="step-search">
+              <div class="step-icon">2</div>
+              <span>Buscando en tiendas</span>
+            </div>
+            <div class="progress-step" id="step-compare">
+              <div class="step-icon">3</div>
+              <span>Comparando y normalizando precios</span>
+            </div>
+          </div>
+        </div>
+
         <button
-          class="btn btn-accent"
-          style="width:100%;padding:14px"
+          class="btn-analyze"
+          id="btn-analyze"
           onclick="analyzePrice()"
           aria-label="Analizar precios del producto cargado en múltiples tiendas"
         >
-          Analizar Precios
+          <div class="btn-spinner" aria-hidden="true"></div>
+          <span class="btn-text">Analizar Precios</span>
         </button>
       </div>
     </section>
@@ -679,6 +753,21 @@
           </select>
         </div>
       </fieldset>
+
+      <!-- Banner resumen de resultados (se muestra cuando hay datos) -->
+      <div class="results-summary" id="results-summary" style="display:none" aria-live="polite">
+        <div class="results-summary-icon" aria-hidden="true">
+          <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="20 12 20 22 4 22 4 12"/><rect x="2" y="7" width="20" height="5"/><line x1="12" y1="22" x2="12" y2="7"/><path d="M12 7H7.5a2.5 2.5 0 0 1 0-5C11 2 12 7 12 7z"/><path d="M12 7h4.5a2.5 2.5 0 0 0 0-5C13 2 12 7 12 7z"/></svg>
+        </div>
+        <div class="results-summary-text">
+          <div class="results-summary-title" id="summary-title">Mejor precio disponible</div>
+          <div class="results-summary-sub" id="summary-sub">Comparando precios en múltiples tiendas</div>
+        </div>
+        <div style="text-align:right">
+          <div style="font-family:var(--font-head);font-size:22px;font-weight:700;color:var(--green)" id="summary-price"></div>
+          <div style="font-size:11px;color:var(--muted)" id="summary-store"></div>
+        </div>
+      </div>
 
       <!-- Estado vacío accesible con role="status" -->
       <div id="no-search-yet" class="no-search-state" role="status" aria-live="polite">

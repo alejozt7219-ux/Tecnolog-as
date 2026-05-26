@@ -1896,3 +1896,363 @@ tbody tr:hover { background: var(--bg3); }
   .scan-line { animation: none; }
   .loader-ring { animation: spin 2s linear infinite; }
 }
+/* ═══════════════════════════════════════════════
+   UX IMPROVEMENTS — appended
+   ═══════════════════════════════════════════════ */
+
+/* ── Skeleton loaders ── */
+@keyframes shimmer {
+  0%   { background-position: -400px 0; }
+  100% { background-position: 400px 0; }
+}
+.skeleton {
+  background: linear-gradient(90deg, var(--bg3) 25%, var(--bg4) 50%, var(--bg3) 75%);
+  background-size: 800px 100%;
+  animation: shimmer 1.4s infinite linear;
+  border-radius: 6px;
+}
+.skeleton-card {
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.skeleton-line { height: 12px; }
+.skeleton-line.w60 { width: 60%; }
+.skeleton-line.w40 { width: 40%; }
+.skeleton-line.w80 { width: 80%; }
+.skeleton-line.h24 { height: 24px; }
+.skeleton-line.h32 { height: 32px; }
+
+/* ── Trend chart in dashboard ── */
+.chart-section {
+  margin-bottom: 32px;
+}
+.chart-card {
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 24px;
+}
+.chart-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  margin-bottom: 20px;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+.chart-title {
+  font-family: var(--font-head);
+  font-size: 15px;
+  font-weight: 600;
+  margin-bottom: 2px;
+}
+.chart-sub { font-size: 12px; color: var(--muted); }
+.chart-legend {
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+.legend-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  color: var(--muted);
+}
+.legend-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+#price-chart-svg {
+  width: 100%;
+  overflow: visible;
+}
+.chart-tooltip {
+  position: absolute;
+  background: var(--bg4);
+  border: 1px solid var(--border2);
+  border-radius: 8px;
+  padding: 8px 12px;
+  font-size: 12px;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.15s;
+  z-index: 100;
+  white-space: nowrap;
+  color: var(--text);
+}
+.chart-tooltip.visible { opacity: 1; }
+.chart-tooltip-store { color: var(--muted); font-size: 11px; margin-bottom: 2px; }
+.chart-tooltip-price { font-family: var(--font-head); font-weight: 700; font-size: 14px; }
+.chart-wrap { position: relative; }
+
+/* ── Visual search improvements ── */
+.attrs-loading {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 20px;
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  margin-bottom: 16px;
+}
+.attrs-loading-label {
+  font-size: 12px;
+  color: var(--muted);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.attrs-loading-label::before {
+  content: '';
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--accent);
+  animation: pulse-dot 1s infinite;
+}
+@keyframes pulse-dot {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50%       { opacity: 0.4; transform: scale(0.6); }
+}
+
+/* ── Analyze button states ── */
+.btn-analyze {
+  width: 100%;
+  padding: 14px;
+  border-radius: var(--radius);
+  border: none;
+  font-family: var(--font-head);
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  background: var(--accent);
+  color: #fff;
+  position: relative;
+  overflow: hidden;
+}
+.btn-analyze:hover:not(:disabled) { background: var(--accent3); transform: translateY(-1px); }
+.btn-analyze:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
+.btn-analyze .btn-spinner {
+  width: 18px;
+  height: 18px;
+  border: 2px solid rgba(255,255,255,0.3);
+  border-top-color: #fff;
+  border-radius: 50%;
+  animation: spin 0.7s linear infinite;
+  display: none;
+}
+.btn-analyze.loading .btn-spinner { display: block; }
+.btn-analyze.loading .btn-text { opacity: 0.7; }
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* ── Progress steps for analysis ── */
+.analysis-progress {
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 20px;
+  margin-top: 16px;
+  display: none;
+}
+.analysis-progress.visible { display: block; }
+.progress-steps {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.progress-step {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 13px;
+  color: var(--muted);
+  transition: color 0.3s;
+}
+.progress-step.active { color: var(--text); }
+.progress-step.done   { color: var(--green); }
+.step-icon {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  border: 2px solid var(--border2);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 10px;
+  flex-shrink: 0;
+  transition: all 0.3s;
+}
+.progress-step.active .step-icon {
+  border-color: var(--accent);
+  background: rgba(124,111,255,0.15);
+}
+.progress-step.done .step-icon {
+  border-color: var(--green);
+  background: rgba(34,217,142,0.15);
+}
+
+/* ── Result cards enhanced ── */
+.result-card {
+  position: relative;
+}
+.result-saving {
+  font-size: 11px;
+  color: var(--green);
+  background: var(--green-bg);
+  padding: 2px 8px;
+  border-radius: 100px;
+  display: inline-block;
+  margin-top: 6px;
+}
+.result-price-diff {
+  font-size: 11px;
+  color: var(--red);
+  margin-top: 2px;
+}
+.results-summary {
+  background: linear-gradient(135deg, rgba(34,217,142,0.08), rgba(124,111,255,0.08));
+  border: 1px solid rgba(34,217,142,0.2);
+  border-radius: var(--radius-lg);
+  padding: 16px 20px;
+  margin-bottom: 20px;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+.results-summary-icon {
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
+  background: var(--green-bg);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+.results-summary-icon svg { width: 20px; height: 20px; stroke: var(--green); }
+.results-summary-text { flex: 1; }
+.results-summary-title {
+  font-family: var(--font-head);
+  font-size: 14px;
+  font-weight: 600;
+  margin-bottom: 2px;
+}
+.results-summary-sub { font-size: 12px; color: var(--muted); }
+
+/* ── Empty state with action ── */
+.no-results-state {
+  grid-column: 1/-1;
+  text-align: center;
+  padding: 60px 20px;
+}
+.no-results-icon {
+  font-size: 48px;
+  margin-bottom: 16px;
+  opacity: 0.5;
+}
+
+/* ── Dashboard chart section heading ── */
+.section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 16px;
+}
+.section-header .section-title { margin-bottom: 0; }
+
+/* ── Stat card mini sparkline ── */
+.stat-spark {
+  margin-top: 12px;
+  height: 32px;
+}
+.stat-spark svg { width: 100%; height: 32px; overflow: visible; }
+
+/* ── Attrs card real data ── */
+.kw-list .kw {
+  cursor: default;
+  transition: all 0.15s;
+}
+.kw-list .kw:hover {
+  background: rgba(124,111,255,0.2);
+  border-color: var(--accent2);
+  color: var(--accent2);
+}
+.attrs-confidence {
+  font-size: 11px;
+  color: var(--muted);
+  margin-top: 16px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.confidence-bar {
+  flex: 1;
+  height: 4px;
+  background: var(--bg3);
+  border-radius: 2px;
+  overflow: hidden;
+}
+.confidence-fill {
+  height: 100%;
+  background: linear-gradient(90deg, var(--accent), var(--green));
+  border-radius: 2px;
+  transition: width 0.8s ease;
+}
+
+/* ── Stores price range badge ── */
+.price-spread {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 8px;
+  font-size: 12px;
+  color: var(--muted);
+}
+.price-spread-bar {
+  flex: 1;
+  height: 3px;
+  background: var(--bg3);
+  border-radius: 2px;
+  position: relative;
+}
+.price-spread-fill {
+  position: absolute;
+  height: 100%;
+  background: linear-gradient(90deg, var(--green), var(--accent));
+  border-radius: 2px;
+}
+
+/* ── Botón "Ver comparativa" en el banner de última búsqueda ── */
+.summary-view-btn {
+  white-space: nowrap;
+  flex-shrink: 0;
+  background: rgba(34,217,142,0.15);
+  border: 1px solid rgba(34,217,142,0.3);
+  color: var(--green);
+  padding: 8px 16px;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+  font-family: var(--font-head);
+}
+.summary-view-btn:hover {
+  background: rgba(34,217,142,0.25);
+  transform: translateX(2px);
+}
