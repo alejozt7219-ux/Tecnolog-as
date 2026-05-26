@@ -37,7 +37,9 @@ document.addEventListener('DOMContentLoaded', async () => {
   // Auto-login si ya hay token guardado
   if (Auth.isLoggedIn()) {
     try {
+      console.log('Token guardado:', Auth.getAccess());
       currentUser = await ApiAuth.me();
+      console.log('Me response:', currentUser);
       _applyUserToUI(currentUser);
     } catch (_) {
       Auth.clear();

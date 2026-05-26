@@ -4,28 +4,25 @@ import logging
 logger = logging.getLogger(__name__)
 
 
-class AlkostoScraper(BaseScraper):
-    store_name = "Alkosto"
-    base_url = "https://www.alkosto.com"
+class FalabellaScraper(BaseScraper):
+    store_name = "Falabella"
+    base_url = "https://www.falabella.com.co"
 
     async def search(self, query: str) -> list[ScrapedPrice]:
         page = await self.new_page()
         results = []
 
         try:
-            search_url = f"{self.base_url}/search?text={query.replace(' ', '+')}"
+            search_url = f"{self.base_url}/falabella-co/search?Ntt={query.replace(' ', '+')}"
             await page.goto(search_url, timeout=self._timeout())
-            await page.wait_for_load_state("domcontentloaded")
-            # Alkosto carga los productos con JS, esperamos el grid
-            await page.wait_for_selector(".product__item", timeout=12000)
+            await page.wait_for_selector("a.pod-link", timeout=12000)
 
-            items = await page.query_selector_all(".product__item")
+            items = await page.query_selector_all("a.pod-link")
 
             for item in items[:5]:
                 try:
-                    title_el = await item.query_selector(".product__information--name")
-                    price_el = await item.query_selector(".price")
-                    link_el  = await item.query_selector("a.product__item--anchor")
+                    title_el = await item.query_selector("b.pod-subTitle")
+                    price_el = await item.query_selector("li.prices-0 span")
 
                     if not title_el or not price_el:
                         continue
@@ -39,8 +36,9 @@ class AlkostoScraper(BaseScraper):
                         .strip()
                     )
                     price = float(price_str)
-                    href  = await link_el.get_attribute("href") if link_el else ""
-                    url   = f"{self.base_url}{href}" if href.startswith("/") else href
+                    url   = await item.get_attribute("href") or ""
+                    if url.startswith("/"):
+                        url = f"{self.base_url}{url}"
 
                     results.append(
                         ScrapedPrice(
@@ -53,11 +51,11 @@ class AlkostoScraper(BaseScraper):
                         )
                     )
                 except Exception as e:
-                    logger.debug(f"[Alkosto] Error parseando item: {e}")
+                    logger.debug(f"[Falabella] Error parseando item: {e}")
                     continue
 
         except Exception as e:
-            logger.error(f"[Alkosto] Error en búsqueda '{query}': {e}")
+            logger.error(f"[Falabella] Error en búsqueda '{query}': {e}")
         finally:
             await page.close()
 

@@ -3,7 +3,7 @@ import logging
 from app.workers.celery_app import celery_app
 from app.scraper.amazon import AmazonScraper
 from app.scraper.mercadolibre import MercadoLibreScraper
-from app.scraper.alkosto import AlkostoScraper
+from app.scraper.falabella import FalabellaScraper
 from app.scraper.exito import ExitoScraper
 
 logger = logging.getLogger(__name__)
@@ -12,26 +12,29 @@ logger = logging.getLogger(__name__)
 def run_async(coro):
     """Helper para correr corutinas dentro de tareas Celery (sync)."""
     loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
     try:
         return loop.run_until_complete(coro)
     finally:
         loop.close()
+        asyncio.set_event_loop(None)
 
 
 @celery_app.task(bind=True, name="app.workers.tasks.scrape_product")
 def scrape_product(self, task_id: str, query: str, search_history_id):
-    """
-    Tarea principal: corre todos los scrapers en paralelo y guarda resultados en DB.
-    search_history_id puede ser None cuando viene del daily scraping (no hay historial de usuario).
-    """
-    from app.core.database import AsyncSessionLocal
+    from sqlalchemy import create_engine, select, text
+    from sqlalchemy.orm import Session
     from app.models.product import SearchHistory, Product, PriceResult, Store, TaskStatus
-    from sqlalchemy import select
+    from app.core.config import settings
     import unicodedata
     import re
 
-    async def _run():
-        scrapers = [AmazonScraper, MercadoLibreScraper, AlkostoScraper, ExitoScraper]
+    # Usar URL síncrona (psycopg2) en vez de asyncpg
+    sync_url = settings.DATABASE_URL.replace("postgresql+asyncpg://", "postgresql+psycopg2://")
+    engine = create_engine(sync_url)
+
+    async def _scrape():
+        scrapers = [AmazonScraper, MercadoLibreScraper, FalabellaScraper, ExitoScraper]
         all_results = []
 
         async def scrape_one(ScraperClass):
@@ -47,80 +50,85 @@ def scrape_product(self, task_id: str, query: str, search_history_id):
             if isinstance(store_results, list):
                 all_results.extend(store_results)
 
-        async with AsyncSessionLocal() as db:
-            history = None
-            if search_history_id:
-                history = await db.get(SearchHistory, search_history_id)
+        return all_results
 
-            if not all_results:
-                if history:
-                    history.status = TaskStatus.error
-                    history.error_message = "No se encontraron resultados"
-                    await db.commit()
-                return
+    # Correr el scraping async
+    all_results = run_async(_scrape())
 
-            normalized = unicodedata.normalize("NFKD", query).lower()
-            normalized = re.sub(r"[^\w\s]", "", normalized).strip()
+    # Guardar en DB de forma síncrona
+    with Session(engine) as db:
+        history = None
+        if search_history_id:
+            history = db.get(SearchHistory, search_history_id)
 
-            result_stmt = await db.execute(
-                select(Product).where(Product.normalized_name == normalized)
-            )
-            product = result_stmt.scalar_one_or_none()
-
-            if not product:
-                product = Product(name=query, normalized_name=normalized)
-                db.add(product)
-                await db.flush()
-
-            for scraped in all_results:
-                store_stmt = await db.execute(
-                    select(Store).where(Store.name == scraped.store_name)
-                )
-                store = store_stmt.scalar_one_or_none()
-                if not store:
-                    store = Store(name=scraped.store_name, base_url=scraped.url[:50])
-                    db.add(store)
-                    await db.flush()
-
-                price_result = PriceResult(
-                    product_id=product.id,
-                    store_id=store.id,
-                    price=scraped.price,
-                    currency=scraped.currency,
-                    url=scraped.url,
-                    title=scraped.title,
-                    in_stock=scraped.in_stock,
-                )
-                db.add(price_result)
-
+        if not all_results:
             if history:
-                history.status = TaskStatus.done
-                history.product_id = product.id
+                history.status = TaskStatus.error
+                history.error_message = "No se encontraron resultados"
+                db.commit()
+            engine.dispose()
+            return
 
-            await db.commit()
-            logger.info(f"[Task {task_id}] Completado. {len(all_results)} precios guardados.")
+        normalized = unicodedata.normalize("NFKD", query).lower()
+        normalized = re.sub(r"[^\w\s]", "", normalized).strip()
 
-    run_async(_run())
+        product = db.execute(
+            select(Product).where(Product.normalized_name == normalized)
+        ).scalar_one_or_none()
+
+        if not product:
+            product = Product(name=query, normalized_name=normalized)
+            db.add(product)
+            db.flush()
+
+        for scraped in all_results:
+            store = db.execute(
+                select(Store).where(Store.name == scraped.store_name)
+            ).scalar_one_or_none()
+            if not store:
+                store = Store(name=scraped.store_name, base_url=scraped.url[:50])
+                db.add(store)
+                db.flush()
+
+            price_result = PriceResult(
+                product_id=product.id,
+                store_id=store.id,
+                price=scraped.price,
+                currency=scraped.currency,
+                url=scraped.url,
+                title=scraped.title,
+                in_stock=scraped.in_stock,
+            )
+            db.add(price_result)
+
+        if history:
+            history.status = TaskStatus.done
+            history.product_id = product.id
+
+        db.commit()
+        logger.info(f"[Task {task_id}] Completado. {len(all_results)} precios guardados.")
+
+    engine.dispose()
 
 
 @celery_app.task(name="app.workers.tasks.run_daily_scraping")
 def run_daily_scraping():
-    """Tarea programada: dispara scraping de todos los productos conocidos."""
-    from app.core.database import AsyncSessionLocal
+    from sqlalchemy import create_engine, select
+    from sqlalchemy.orm import Session
     from app.models.product import Product
-    from sqlalchemy import select
+    from app.core.config import settings
 
-    async def _run():
-        async with AsyncSessionLocal() as db:
-            result = await db.execute(select(Product))
-            products = result.scalars().all()
+    sync_url = settings.DATABASE_URL.replace("postgresql+asyncpg://", "postgresql+psycopg2://")
+    engine = create_engine(sync_url)
 
-        for product in products:
-            scrape_product.delay(
-                task_id=f"daily-{product.id}",
-                query=product.normalized_name,
-                search_history_id=None,
-            )
-        logger.info(f"[Daily] Scraping lanzado para {len(products)} productos.")
+    with Session(engine) as db:
+        products = db.execute(select(Product)).scalars().all()
 
-    run_async(_run())
+    for product in products:
+        scrape_product.delay(
+            task_id=f"daily-{product.id}",
+            query=product.normalized_name,
+            search_history_id=None,
+        )
+    logger.info(f"[Daily] Scraping lanzado para {len(products)} productos.")
+    engine.dispose()

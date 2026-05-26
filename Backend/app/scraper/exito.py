@@ -13,21 +13,17 @@ class ExitoScraper(BaseScraper):
         results = []
 
         try:
-            search_url = f"{self.base_url}/{query.replace(' ', '-')}/s"
+            search_url = f"{self.base_url}/s?q={query.replace(' ', '+')}&sort=score_desc&page=0"
             await page.goto(search_url, timeout=self._timeout())
-            await page.wait_for_load_state("domcontentloaded")
-            await page.wait_for_selector("[data-testid='store-product-card']", timeout=12000)
+            await page.wait_for_selector("h3.styles_name__qQJiK", timeout=12000)
 
-            items = await page.query_selector_all("[data-testid='store-product-card']")
+            items = await page.query_selector_all(".productCard_contentInfo__CBBA7")
 
             for item in items[:5]:
                 try:
-                    title_el = await item.query_selector("[data-testid='product-title']")
-                    # Éxito muestra el precio en un span con clase de cantidad
-                    price_el = await item.query_selector(".ProductPrice_container__price__XmMWM")
-                    if not price_el:
-                        price_el = await item.query_selector("[class*='ProductPrice']")
-                    link_el  = await item.query_selector("a")
+                    title_el = await item.query_selector("h3.styles_name__qQJiK")
+                    price_el = await item.query_selector("p.ProductPrice_container__price__XmMWA")
+                    link_el  = await item.query_selector("a[data-testid='product-link']")
 
                     if not title_el or not price_el:
                         continue
@@ -39,7 +35,6 @@ class ExitoScraper(BaseScraper):
                         .replace(".", "")
                         .replace(",", "")
                         .strip()
-                        .split("\n")[0]  # tomar solo la primera línea por si hay precio tachado
                     )
                     price = float(price_str)
                     href  = await link_el.get_attribute("href") if link_el else ""

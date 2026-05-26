@@ -17,8 +17,8 @@ allowed_origins = ["*"] if settings.DEBUG else settings.CORS_ORIGINS
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=allowed_origins,
-    allow_credentials=not settings.DEBUG,  # credentials no es compatible con wildcard
+    allow_origins=["*"],
+    allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
 )

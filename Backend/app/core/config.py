@@ -1,6 +1,5 @@
 from pydantic_settings import BaseSettings
 from functools import lru_cache
-from typing import list as List
 
 
 class Settings(BaseSettings):
@@ -26,7 +25,7 @@ class Settings(BaseSettings):
     CELERY_RESULT_BACKEND: str = "redis://localhost:6379/1"
 
     # Google Gemini
-    GEMINI_API_KEY: str
+    GROQ_API_KEY: str
 
     # Scraping
     SCRAPER_TIMEOUT: int = 30

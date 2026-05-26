@@ -5,9 +5,7 @@
    ═══════════════════════════════════════════════ */
 
 // Después
-const API_BASE = (window.location.hostname === 'localhost' || window.location.hostname === '')
-  ? 'http://localhost:8000'
-  : 'https://tu-api.railway.app';
+const API_BASE = 'http://localhost:8000';
 
 /* ── Token storage ─────────────────────────────── */
 const Auth = {

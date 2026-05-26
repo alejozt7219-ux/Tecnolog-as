@@ -1,12 +1,7 @@
 import base64
 import json
-import asyncio
-from functools import partial
-import google.generativeai as genai
+import httpx
 from app.core.config import settings
-
-genai.configure(api_key=settings.GEMINI_API_KEY)
-model = genai.GenerativeModel("gemini-1.5-flash")
 
 IDENTIFY_PROMPT = """Analiza esta imagen de un producto y responde ÚNICAMENTE con un JSON en este formato exacto, sin texto adicional, sin backticks, solo el JSON puro:
 {
@@ -18,24 +13,37 @@ IDENTIFY_PROMPT = """Analiza esta imagen de un producto y responde ÚNICAMENTE c
 
 
 async def identify_product_from_image(image_bytes: bytes, media_type: str = "image/jpeg") -> dict:
-    """
-    Manda la imagen a Gemini Vision y regresa los datos del producto identificado.
-    Gemini SDK es síncrono, así que lo corremos en un thread pool para no bloquear.
-    """
-    image_part = {
-        "mime_type": media_type,
-        "data": base64.b64encode(image_bytes).decode(),
-    }
+    image_data = base64.standard_b64encode(image_bytes).decode("utf-8")
 
-    loop = asyncio.get_event_loop()
-    response = await loop.run_in_executor(
-        None,
-        partial(model.generate_content, [IDENTIFY_PROMPT, image_part]),
-    )
+    async with httpx.AsyncClient(timeout=30) as client:
+        response = await client.post(
+            "https://api.groq.com/openai/v1/chat/completions",
+            headers={
+                "Authorization": f"Bearer {settings.GROQ_API_KEY}",
+                "Content-Type": "application/json",
+            },
+            json={
+                "model": "meta-llama/llama-4-scout-17b-16e-instruct",
+                "max_tokens": 300,
+                "messages": [
+                    {
+                        "role": "user",
+                        "content": [
+                            {
+                                "type": "image_url",
+                                "image_url": {
+                                    "url": f"data:{media_type};base64,{image_data}"
+                                },
+                            },
+                            {"type": "text", "text": IDENTIFY_PROMPT},
+                        ],
+                    }
+                ],
+            },
+        )
+        response.raise_for_status()
+        raw = response.json()["choices"][0]["message"]["content"].strip()
 
-    raw = response.text.strip()
-
-    # Limpia por si Gemini manda backticks de markdown
     if raw.startswith("```"):
         raw = raw.split("```")[1]
         if raw.startswith("json"):
@@ -45,7 +53,6 @@ async def identify_product_from_image(image_bytes: bytes, media_type: str = "ima
     try:
         return json.loads(raw)
     except json.JSONDecodeError:
-        # Fallback: si no parsea bien, regresa un dict básico
         return {
             "name": "Producto no identificado",
             "category": "general",
