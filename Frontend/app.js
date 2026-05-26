@@ -1,7 +1,6 @@
 /* ═══════════════════════════════════════════════
    PriceVision — app.js
    ═══════════════════════════════════════════════ */
-
 /* ═══════════════════ STATE ═══════════════════ */
 let currentScreen  = 'landing';
 let isAdminEmail   = false;
@@ -42,6 +41,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       _applyUserToUI(currentUser);
     } catch (_) {
       Auth.clear();
+      showScreen('landing');
     }
   }
 });

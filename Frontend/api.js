@@ -4,9 +4,10 @@
    Importado antes de app.js en index.html.
    ═══════════════════════════════════════════════ */
 
-const API_BASE = window.location.hostname === 'localhost'
+// Después
+const API_BASE = (window.location.hostname === 'localhost' || window.location.hostname === '')
   ? 'http://localhost:8000'
-  : 'https://tu-api.railway.app';   // <-- cambia esto al deploy
+  : 'https://tu-api.railway.app';
 
 /* ── Token storage ─────────────────────────────── */
 const Auth = {

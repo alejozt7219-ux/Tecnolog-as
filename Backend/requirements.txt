@@ -5,7 +5,11 @@ python-multipart==0.0.9
 
 # Auth
 python-jose[cryptography]==3.3.0
+
+# Después
 passlib[bcrypt]==1.7.4
+bcrypt==4.0.1
+
 
 # DB
 sqlalchemy==2.0.30

@@ -45,7 +45,8 @@ class BaseScraper(ABC):
                 "Chrome/124.0.0.0 Safari/537.36"
             ),
             viewport={"width": 1280, "height": 800},
-            locale="es-MX",
+            locale="es-CO",
+            timezone_id="America/Bogota",
         )
         page = await context.new_page()
         # Bloquea recursos innecesarios para ir más rápido

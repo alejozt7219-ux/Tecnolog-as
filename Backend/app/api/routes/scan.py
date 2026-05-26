@@ -1,8 +1,9 @@
 import uuid
-from fastapi import APIRouter, Depends, UploadFile, File, HTTPException, Query
+from fastapi import APIRouter, Depends, UploadFile, File, HTTPException, Query, Request
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
+from sqlalchemy import select, func
 from sqlalchemy.orm import selectinload
+from datetime import datetime, timedelta, timezone
 from app.core.database import get_db
 from app.core.deps import get_current_user
 from app.models.user import User
@@ -15,6 +16,28 @@ router = APIRouter(tags=["scan"])
 
 ALLOWED_TYPES = {"image/jpeg", "image/png", "image/webp"}
 
+# Rate limit: máximo de escaneos por usuario en una ventana de tiempo
+SCAN_RATE_LIMIT = 10       # máx solicitudes
+SCAN_RATE_WINDOW = 60 * 60  # ventana de 1 hora en segundos
+
+
+async def check_scan_rate_limit(user_id: int, db: AsyncSession) -> None:
+    """Bloquea si el usuario hizo demasiados escaneos en la última hora."""
+    window_start = datetime.now(timezone.utc) - timedelta(seconds=SCAN_RATE_WINDOW)
+    result = await db.execute(
+        select(func.count(SearchHistory.id)).where(
+            SearchHistory.user_id == user_id,
+            SearchHistory.created_at >= window_start,
+        )
+    )
+    count = result.scalar_one()
+    if count >= SCAN_RATE_LIMIT:
+        raise HTTPException(
+            status_code=429,
+            detail=f"Límite alcanzado: máximo {SCAN_RATE_LIMIT} búsquedas por hora. Intenta más tarde.",
+            headers={"Retry-After": str(SCAN_RATE_WINDOW)},
+        )
+
 
 @router.post("/scan", response_model=ScanResponse)
 async def scan(
@@ -22,6 +45,9 @@ async def scan(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
+    # Rate limit por usuario
+    await check_scan_rate_limit(current_user.id, db)
+
     if file.content_type not in ALLOWED_TYPES:
         raise HTTPException(status_code=400, detail="Solo se aceptan imágenes JPG, PNG o WebP")
 
@@ -29,7 +55,7 @@ async def scan(
     if len(image_bytes) > 10 * 1024 * 1024:  # 10 MB límite
         raise HTTPException(status_code=400, detail="Imagen demasiado grande (máx. 10 MB)")
 
-    # 1. Identificar producto con Claude Vision
+    # 1. Identificar producto con Gemini Vision
     try:
         product_info = await identify_product_from_image(image_bytes, file.content_type)
     except Exception as e:
@@ -92,6 +118,8 @@ async def search_by_text(
     current_user: User = Depends(get_current_user),
 ):
     """Búsqueda por texto (fallback cuando no hay foto)."""
+    await check_scan_rate_limit(current_user.id, db)
+
     task_id = str(uuid.uuid4())
 
     history = SearchHistory(

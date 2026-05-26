@@ -10,10 +10,15 @@ app = FastAPI(
     redoc_url=None,
 )
 
+# En DEBUG se permiten todos los orígenes para desarrollo local.
+# En producción CORS_ORIGINS debe definirse en el .env, por ejemplo:
+# CORS_ORIGINS=https://mi-app.railway.app,https://mi-dominio.com
+allowed_origins = ["*"] if settings.DEBUG else settings.CORS_ORIGINS
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"] if settings.DEBUG else ["https://tu-dominio.railway.app"],
-    allow_credentials=True,
+    allow_origins=allowed_origins,
+    allow_credentials=not settings.DEBUG,  # credentials no es compatible con wildcard
     allow_methods=["*"],
     allow_headers=["*"],
 )

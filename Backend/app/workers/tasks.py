@@ -1,10 +1,10 @@
 import asyncio
 import logging
-from celery import group
 from app.workers.celery_app import celery_app
 from app.scraper.amazon import AmazonScraper
 from app.scraper.mercadolibre import MercadoLibreScraper
-from app.scraper.linio import LinioScraper
+from app.scraper.alkosto import AlkostoScraper
+from app.scraper.exito import ExitoScraper
 
 logger = logging.getLogger(__name__)
 
@@ -31,7 +31,7 @@ def scrape_product(self, task_id: str, query: str, search_history_id):
     import re
 
     async def _run():
-        scrapers = [AmazonScraper, MercadoLibreScraper, LinioScraper]
+        scrapers = [AmazonScraper, MercadoLibreScraper, AlkostoScraper, ExitoScraper]
         all_results = []
 
         async def scrape_one(ScraperClass):
@@ -48,7 +48,6 @@ def scrape_product(self, task_id: str, query: str, search_history_id):
                 all_results.extend(store_results)
 
         async with AsyncSessionLocal() as db:
-            # Obtener historial solo si hay un ID real (no es tarea programada)
             history = None
             if search_history_id:
                 history = await db.get(SearchHistory, search_history_id)
@@ -60,7 +59,6 @@ def scrape_product(self, task_id: str, query: str, search_history_id):
                     await db.commit()
                 return
 
-            # Crea o actualiza el producto
             normalized = unicodedata.normalize("NFKD", query).lower()
             normalized = re.sub(r"[^\w\s]", "", normalized).strip()
 
@@ -74,7 +72,6 @@ def scrape_product(self, task_id: str, query: str, search_history_id):
                 db.add(product)
                 await db.flush()
 
-            # Guarda los precios
             for scraped in all_results:
                 store_stmt = await db.execute(
                     select(Store).where(Store.name == scraped.store_name)
@@ -122,7 +119,7 @@ def run_daily_scraping():
             scrape_product.delay(
                 task_id=f"daily-{product.id}",
                 query=product.normalized_name,
-                search_history_id=None,  # None = tarea programada, sin historial de usuario
+                search_history_id=None,
             )
         logger.info(f"[Daily] Scraping lanzado para {len(products)} productos.")
 
