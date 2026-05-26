@@ -1,5 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.requests import Request
 from app.core.config import settings
 from app.api.routes import auth, scan, admin
 
@@ -10,24 +12,24 @@ app = FastAPI(
     redoc_url=None,
 )
 
-# En DEBUG se permiten todos los orígenes para desarrollo local.
-# En producción CORS_ORIGINS debe definirse en el .env, por ejemplo:
-# CORS_ORIGINS=https://mi-app.railway.app,https://mi-dominio.com
-allowed_origins = ["*"] if settings.DEBUG else settings.CORS_ORIGINS
+class CORSManualMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request: Request, call_next):
+        if request.method == "OPTIONS":
+            from starlette.responses import Response
+            response = Response()
+            response.headers["Access-Control-Allow-Origin"] = "*"
+            response.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, PATCH, DELETE, OPTIONS"
+            response.headers["Access-Control-Allow-Headers"] = "*"
+            return response
+        response = await call_next(request)
+        response.headers["Access-Control-Allow-Origin"] = "*"
+        return response
 
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=False,
-    allow_methods=["*"],
-    allow_headers=["*", "Authorization", "Content-Type"],
-    expose_headers=["*"],
-)
+app.add_middleware(CORSManualMiddleware)
 
 app.include_router(auth.router)
 app.include_router(scan.router)
 app.include_router(admin.router)
-
 
 @app.get("/health")
 async def health():

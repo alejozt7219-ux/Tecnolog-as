@@ -864,6 +864,27 @@ function _renderScrapingLogs(logs) {
 }
 
 /* ── Admin overview: stats reales ─────────────── */
+/* Agrega una fila al tope de Actividad Reciente en el overview */
+function _addRecentActivity(desc, tipo, statusClass) {
+  const tbody = document.querySelector('#admin-page-overview .table-wrap tbody');
+  if (!tbody) return;
+  const now = new Date().toLocaleString('es-CO');
+  const statusHtml = statusClass
+    ? `<span class="status-badge ${statusClass}">${statusClass === 's-green' ? 'Exitoso' : statusClass === 's-red' ? 'Error' : statusClass === 's-yellow' ? 'En proceso' : 'Aviso'}</span>`
+    : '<span style="color:var(--muted)">—</span>';
+  const row = document.createElement('tr');
+  row.innerHTML = `
+    <td><div class="act-icon"><svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg></div></td>
+    <td>${desc}</td>
+    <td style="color:var(--muted)">${tipo}</td>
+    <td style="color:var(--muted)"><time>${now}</time></td>
+    <td>${statusHtml}</td>
+  `;
+  tbody.insertBefore(row, tbody.firstChild);
+  // Mantener máx 10 filas
+  while (tbody.rows.length > 10) tbody.deleteRow(tbody.rows.length - 1);
+}
+
 async function _loadAdminOverview() {
   try {
     const [data, logs] = await Promise.all([
@@ -975,13 +996,35 @@ function updateStoreCounts() {
   if (storeActiveCountEl) storeActiveCountEl.textContent = active;
 }
 
-function toggleStore(el, name) {
-  const on   = el.checked;
-  const row  = el.closest('tr');
-  const badge = row?.querySelector('.status-badge');
-  if (badge) { badge.className = 'status-badge ' + (on ? 's-green' : 's-red'); badge.textContent = on ? 'Activo' : 'Inactivo'; }
-  updateStoreCounts();
-  showToast('Tienda actualizada', `${name} marcada como ${on ? 'activa' : 'inactiva'}`);
+async function toggleStore(el, name) {
+  const row     = el.closest('tr');
+  const storeId = row?.dataset.storeId;
+  const on      = el.checked;
+  // Revertir visualmente hasta confirmar backend
+  el.disabled = true;
+  try {
+    if (storeId) await ApiAdmin.toggleStore(storeId);
+    const badge = row?.querySelector('.status-badge');
+    if (badge) { badge.className = 'status-badge ' + (on ? 's-green' : 's-red'); badge.textContent = on ? 'Activo' : 'Inactivo'; }
+    // Persistir estado en el dataset para que al recargar quede correcto
+    row.dataset.active = on ? 'true' : 'false';
+    updateStoreCounts();
+    // Actualizar card de tiendas activas en overview
+    const stores = await ApiAdmin.getStores().catch(() => null);
+    if (stores) {
+      const activeCount = stores.filter(s => s.is_active).length;
+      const ratio = document.getElementById('acnt-stores-ratio');
+      if (ratio) ratio.textContent = `${activeCount}/${stores.length}`;
+    }
+    showToast('Tienda actualizada', `${name} marcada como ${on ? 'activa' : 'inactiva'}`);
+    _addRecentActivity(`Tienda ${name} marcada como ${on ? 'Activa' : 'Inactiva'}`, 'Tienda', on ? 's-green' : 's-red');
+  } catch (err) {
+    // Revertir checkbox si falla
+    el.checked = !on;
+    showToast('Error', err.message || 'No se pudo actualizar la tienda', true);
+  } finally {
+    el.disabled = false;
+  }
 }
 
 /* ── Admin: toggle usuario REAL ─────────────────── */
@@ -997,6 +1040,7 @@ async function deleteUser(btn, name) {
     tr.style.transform = 'translateX(20px)';
     setTimeout(() => tr.remove(), 320);
     showToast('Usuario eliminado', `${name} fue eliminado del sistema`);
+    _addRecentActivity(`Usuario ${name} eliminado`, 'Usuario', 's-red');
   } catch (err) {
     showToast('Error', err.message || 'No se pudo eliminar', true);
   }
@@ -1021,6 +1065,7 @@ async function toggleUser(el, name) {
       badge.textContent = el.checked ? 'Activo' : 'Inactivo';
     }
     showToast('Usuario actualizado', `${name} ${el.checked ? 'activado' : 'desactivado'}`);
+    _addRecentActivity(`Usuario ${name} ${el.checked ? 'activado' : 'desactivado'}`, 'Usuario', el.checked ? 's-green' : 's-yellow');
   } catch (err) {
     el.checked = !el.checked; // revertir si falla
     showToast('Error', err.message, true);
@@ -1073,6 +1118,7 @@ async function runScraping() {
     window._scrapingStartTimes[res.task_id] = startTime;
 
     showToast('Scraping iniciado', `Buscando: ${res.query || 'producto demo'} 🔍`);
+    _addRecentActivity(`Scraping manual iniciado: ${res.query || 'producto demo'}`, 'Scraping', 's-yellow');
 
     // Polling: esperar a que el task_id termine y refrescar el dashboard
     _pollDashboardUpdate(res.task_id);

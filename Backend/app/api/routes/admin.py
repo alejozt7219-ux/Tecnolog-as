@@ -150,6 +150,12 @@ async def delete_user(
     if not user:
         raise HTTPException(status_code=404, detail="Usuario no encontrado")
 
+    # Borrar registros relacionados antes de eliminar el usuario
+    from app.models.product import SearchHistory
+    history = await db.execute(select(SearchHistory).where(SearchHistory.user_id == user_id))
+    for h in history.scalars().all():
+        await db.delete(h)
+
     await db.delete(user)
     await db.commit()
 
