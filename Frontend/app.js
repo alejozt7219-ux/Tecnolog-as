@@ -187,7 +187,7 @@ async function doLogin() {
 
     // El rol viene directamente del backend (no del email)
     const isAdmin = currentUser.role === 'admin';
-    if (wantsAdmin && isAdmin) {
+    if (isAdmin) {
       showScreen('admin');
       showAdminPage('overview');
       await _loadAdminOverview();
@@ -231,6 +231,9 @@ async function doRegister() {
   }
   if (!org)   { showFieldError('reg-org',   'reg-org-error',   'La organización es obligatoria'); hasError = true; }
   if (!role)  { showFieldError('reg-role',  'reg-role-error',  'Selecciona un rol'); hasError = true; }
+  if (role === 'admin' && !/@admin\./.test(email)) {
+    showFieldError('reg-email', 'reg-email-error', 'Los administradores deben usar un correo tipo nombre@admin.com'); hasError = true;
+  }
   if (!pass)  { showFieldError('reg-pass',  'reg-pass-error',  'La contraseña es obligatoria'); hasError = true; }
   else if (pass.length < 8) {
     showFieldError('reg-pass', 'reg-pass-error', 'La contraseña debe tener mínimo 8 caracteres'); hasError = true;
@@ -249,7 +252,7 @@ async function doRegister() {
   try {
     // FIX: llamada real al backend. El backend espera name, email, password, role.
     // La organización no es un campo del modelo User actual, se ignora por ahora.
-    await ApiAuth.register({ name, email, password: pass });
+    await ApiAuth.register({ name, email, password: pass, role });
 
     // Después del registro, hacer login automático
     await ApiAuth.login(email, pass);
@@ -257,11 +260,18 @@ async function doRegister() {
     _applyUserToUI(currentUser);
     hideLoader();
 
-    wantsAdmin = false;
-    showScreen('app');
-    showPage('dashboard');
-    await _loadDashboard();
-    setTimeout(() => showToast('¡Cuenta creada!', `Bienvenido a PriceVision, ${name.split(' ')[0]}`), 400);
+    const isAdminUser = currentUser.role === 'admin';
+    if (isAdminUser) {
+      showScreen('admin');
+      showAdminPage('overview');
+      await _loadAdminOverview();
+      setTimeout(() => showToast('¡Cuenta creada!', `Bienvenido, ${currentUser.name.split(' ')[0]} 👑`), 400);
+    } else {
+      showScreen('app');
+      showPage('dashboard');
+      await _loadDashboard();
+      setTimeout(() => showToast('¡Cuenta creada!', `Bienvenido a PriceVision, ${name.split(' ')[0]}`), 400);
+    }
   } catch (err) {
     hideLoader();
     // Si el error es de email duplicado lo mostramos en ese campo
@@ -298,12 +308,20 @@ function adminLogout() {
 
 function goUserMode() {
   wantsAdmin = false;
-  const greeting = document.getElementById('login-greeting');
-  if (greeting) greeting.textContent = 'Hola de nuevo';
-  document.getElementById('email-input') && (document.getElementById('email-input').value = '');
-  document.getElementById('pass-input')  && (document.getElementById('pass-input').value  = '');
-  showScreen('login');
-  setTimeout(() => showToast('Modo usuario', 'Inicia sesión como usuario'), 400);
+  // Si hay sesión activa, ir directo al app; si no, al login
+  if (currentUser) {
+    showScreen('app');
+    showPage('dashboard');
+    _loadDashboard();
+    setTimeout(() => showToast('Modo usuario', `Bienvenido, ${currentUser.name.split(' ')[0]} 👋`), 400);
+  } else {
+    const greeting = document.getElementById('login-greeting');
+    if (greeting) greeting.textContent = 'Hola de nuevo';
+    document.getElementById('email-input') && (document.getElementById('email-input').value = '');
+    document.getElementById('pass-input')  && (document.getElementById('pass-input').value  = '');
+    showScreen('login');
+    setTimeout(() => showToast('Modo usuario', 'Inicia sesión como usuario'), 400);
+  }
 }
 
 /* ═══════════════════ PAGE NAV ═══════════════════ */
@@ -817,11 +835,14 @@ function _renderScrapingLogs(logs) {
 /* ── Admin overview: stats reales ─────────────── */
 async function _loadAdminOverview() {
   try {
-    const status = await ApiAdmin.getScrapingStatus();
-    countTo('acnt-products', status.total_searches || 0, 1000);
+    const data = await ApiAdmin.getOverview();
+    countTo('acnt-products',  data.searches?.total    || 0, 1000);
+    countTo('acnt-users',     data.users?.total        || 0, 1000);
+    countTo('acnt-stores',    data.stores?.active      || 0, 1000);
+    countTo('acnt-completed', data.searches?.completed || 0, 1000);
     const lastExec = document.getElementById('last-execution-date');
-    if (lastExec && status.last_run) {
-      lastExec.textContent = new Date(status.last_run).toLocaleDateString('es-CO');
+    if (lastExec && data.scraping?.last_run) {
+      lastExec.textContent = new Date(data.scraping.last_run).toLocaleDateString('es-CO');
     }
   } catch (_) {
     countTo('acnt-products', 0, 600);
@@ -855,14 +876,20 @@ async function addStore() {
   }
 }
 
-function deleteStore(btn, name) {
+async function deleteStore(btn, name) {
   const row = btn.closest('tr');
   if (!row) return;
-  row.style.transition = 'opacity .3s,transform .3s';
-  row.style.opacity    = '0';
-  row.style.transform  = 'translateX(20px)';
-  setTimeout(() => { row.remove(); updateStoreCounts(); }, 320);
-  showToast('Tienda eliminada', `${name} fue eliminada del sistema`);
+  const storeId = btn.dataset.id;
+  try {
+    if (storeId) await ApiAdmin.deleteStore(storeId);
+    row.style.transition = 'opacity .3s,transform .3s';
+    row.style.opacity    = '0';
+    row.style.transform  = 'translateX(20px)';
+    setTimeout(() => { row.remove(); updateStoreCounts(); }, 320);
+    showToast('Tienda eliminada', `${name} fue eliminada del sistema`);
+  } catch (err) {
+    showToast('Error', err.message || 'No se pudo eliminar la tienda', true);
+  }
 }
 
 function updateStoreCounts() {

@@ -84,10 +84,10 @@ const ApiAuth = {
   /* FIX: endpoint de registro agregado
      El backend espera: name, email, password, role
      Por defecto el rol es "analyst" (único rol permitido desde el registro público) */
-  async register({ name, email, password }) {
+  async register({ name, email, password, role = 'analyst' }) {
     const data = await apiFetch('/auth/register', {
       method: 'POST',
-      body: JSON.stringify({ name, email, password, role: 'analyst' }),
+      body: JSON.stringify({ name, email, password, role }),
     });
     return data;
   },
@@ -157,6 +157,9 @@ const ApiScan = {
    ADMIN
 ══════════════════════════════════════════════ */
 const ApiAdmin = {
+  // Overview
+  async getOverview()           { return apiFetch('/admin/overview'); },
+
   // Usuarios
   async getUsers()              { return apiFetch('/admin/users'); },
   async toggleUser(id, active)  {
@@ -171,6 +174,12 @@ const ApiAdmin = {
 
   // Tiendas
   async getStores() { return apiFetch('/admin/stores'); },
+  async deleteStore(id) {
+    return apiFetch(`/admin/stores/${id}`, { method: 'DELETE' });
+  },
+  async toggleStore(id) {
+    return apiFetch(`/admin/stores/${id}/toggle`, { method: 'PATCH' });
+  },
   async createStore(name, base_url, logo_url = null) {
     return apiFetch('/admin/stores', {
       method: 'POST',

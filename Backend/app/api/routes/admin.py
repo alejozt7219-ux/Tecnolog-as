@@ -3,14 +3,60 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func
 from app.core.database import get_db
 from app.core.deps import require_admin
-from app.models.user import User
-from app.models.product import Store, ScrapingLog, SearchHistory
+from app.models.user import User, UserRole
+from app.models.product import Store, ScrapingLog, SearchHistory, Product
 from app.schemas.auth import UserOut, UserCreate, UserToggle
 from app.schemas.product import StoreOut, StoreCreate, ScrapingLogOut
 from app.core.security import hash_password
 import uuid
 
 router = APIRouter(prefix="/admin", tags=["admin"])
+
+
+# ── Overview ──────────────────────────────────────────
+@router.get("/overview")
+async def admin_overview(
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(require_admin),
+):
+    total_users     = await db.scalar(select(func.count(User.id)))
+    active_users    = await db.scalar(select(func.count(User.id)).where(User.is_active == True))
+    admin_users     = await db.scalar(select(func.count(User.id)).where(User.role == UserRole.admin))
+    total_stores    = await db.scalar(select(func.count(Store.id)))
+    active_stores   = await db.scalar(select(func.count(Store.id)).where(Store.is_active == True))
+    total_searches  = await db.scalar(select(func.count(SearchHistory.id)))
+    done_searches   = await db.scalar(
+        select(func.count(SearchHistory.id)).where(SearchHistory.status == "done")
+    )
+    total_products  = await db.scalar(select(func.count(Product.id)))
+
+    last_log_result = await db.execute(
+        select(ScrapingLog).order_by(ScrapingLog.created_at.desc()).limit(1)
+    )
+    last = last_log_result.scalar_one_or_none()
+
+    return {
+        "users": {
+            "total":   total_users,
+            "active":  active_users,
+            "admins":  admin_users,
+        },
+        "stores": {
+            "total":  total_stores,
+            "active": active_stores,
+        },
+        "searches": {
+            "total":     total_searches,
+            "completed": done_searches,
+        },
+        "products":  total_products,
+        "scraping": {
+            "scheduler":  "active",
+            "schedule":   "08:30 AM daily",
+            "last_run":   last.created_at.isoformat() if last else None,
+            "last_status": last.status if last else None,
+        },
+    }
 
 
 # ── Usuarios ──────────────────────────────────────────
@@ -40,6 +86,32 @@ async def create_user(
         role=body.role,
     )
     db.add(user)
+    await db.commit()
+    await db.refresh(user)
+    return user
+
+
+@router.put("/users/{user_id}", response_model=UserOut)
+async def update_user(
+    user_id: int,
+    body: UserCreate,
+    db: AsyncSession = Depends(get_db),
+    admin: User = Depends(require_admin),
+):
+    user = await db.get(User, user_id)
+    if not user:
+        raise HTTPException(status_code=404, detail="Usuario no encontrado")
+
+    # No permitir que el admin se quite su propio rol
+    if user_id == admin.id and body.role != UserRole.admin:
+        raise HTTPException(status_code=400, detail="No puedes cambiar tu propio rol de administrador")
+
+    user.name  = body.name
+    user.email = body.email
+    user.role  = body.role
+    if body.password:
+        user.hashed_password = hash_password(body.password)
+
     await db.commit()
     await db.refresh(user)
     return user
@@ -98,8 +170,42 @@ async def create_store(
     db: AsyncSession = Depends(get_db),
     _: User = Depends(require_admin),
 ):
+    existing = await db.execute(select(Store).where(Store.name == body.name))
+    if existing.scalar_one_or_none():
+        raise HTTPException(status_code=409, detail="Ya existe una tienda con ese nombre")
+
     store = Store(**body.model_dump())
     db.add(store)
+    await db.commit()
+    await db.refresh(store)
+    return store
+
+
+@router.delete("/stores/{store_id}", status_code=204)
+async def delete_store(
+    store_id: int,
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(require_admin),
+):
+    store = await db.get(Store, store_id)
+    if not store:
+        raise HTTPException(status_code=404, detail="Tienda no encontrada")
+
+    await db.delete(store)
+    await db.commit()
+
+
+@router.patch("/stores/{store_id}/toggle", response_model=StoreOut)
+async def toggle_store(
+    store_id: int,
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(require_admin),
+):
+    store = await db.get(Store, store_id)
+    if not store:
+        raise HTTPException(status_code=404, detail="Tienda no encontrada")
+
+    store.is_active = not store.is_active
     await db.commit()
     await db.refresh(store)
     return store
@@ -121,12 +227,12 @@ async def scraping_status(
     last = last_log.scalar_one_or_none()
 
     return {
-        "total_searches": total,
+        "total_searches":     total,
         "completed_searches": done,
-        "scheduler": "active",
-        "schedule": "08:30 AM daily",
-        "last_run": last.created_at.isoformat() if last else None,
-        "last_status": last.status if last else None,
+        "scheduler":          "active",
+        "schedule":           "08:30 AM daily",
+        "last_run":           last.created_at.isoformat() if last else None,
+        "last_status":        last.status if last else None,
     }
 
 

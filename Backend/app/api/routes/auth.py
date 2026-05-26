@@ -24,7 +24,7 @@ async def register(body: UserCreate, db: AsyncSession = Depends(get_db)):
         name=body.name,
         email=body.email,
         hashed_password=hash_password(body.password),
-        role=UserRole.analyst,  # registro público siempre crea analistas
+        role=body.role if body.role else UserRole.analyst,
         is_active=True,
     )
     db.add(user)
