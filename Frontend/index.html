@@ -272,10 +272,8 @@
           <label for="reg-role">Rol <span class="required-mark" aria-hidden="true">*</span></label>
           <select id="reg-role" name="role" required aria-required="true" aria-invalid="false">
             <option value="">Selecciona tu rol</option>
-            <option value="Analista">Analista</option>
-            <option value="Comprador">Comprador</option>
-            <option value="Gerente">Gerente</option>
-            <option value="Otro">Otro</option>
+            <option value="analyst">Analista</option>
+            <option value="admin">Administrador</option>
           </select>
           <span id="reg-role-error" class="field-error" role="alert" aria-live="polite" hidden></span>
         </div>
@@ -1227,7 +1225,7 @@
           <h1 class="page-title" id="admin-scraping-title">Gestión de Scraping</h1>
           <p class="page-sub">Monitorea y controla las ejecuciones de scraping</p>
         </div>
-        <button id="btn-reset-demo" class="btn-sm btn-secondary-sm" style="margin-right:8px;display:none" onclick="resetDemoProducts()">
+        <button id="btn-reset-demo" class="btn-sm btn-secondary-sm" style="margin-right:8px" onclick="resetDemoProducts()">
           ↺ Restablecer productos
         </button>
         <button class="btn-sm" onclick="runScraping()">

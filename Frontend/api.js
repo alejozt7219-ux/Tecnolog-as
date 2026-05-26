@@ -45,7 +45,11 @@ async function apiFetch(path, options = {}) {
 
   if (!res.ok) {
     const err = await res.json().catch(() => ({ detail: 'Error de red' }));
-    throw new Error(err.detail || `HTTP ${res.status}`);
+    // detail puede ser string o array de errores de validación Pydantic
+    const detail = Array.isArray(err.detail)
+      ? err.detail.map(e => e.msg || JSON.stringify(e)).join(', ')
+      : err.detail || `HTTP ${res.status}`;
+    throw new Error(detail);
   }
 
   // 204 No Content no tiene body
@@ -150,6 +154,11 @@ const ApiScan = {
 
   async getHistory(page = 1, limit = 20) {
     return apiFetch(`/history?page=${page}&limit=${limit}`);
+  },
+
+  // Historial global: propias + scrapings del admin (visibles a todos)
+  async getGlobalHistory(page = 1, limit = 20) {
+    return apiFetch(`/history/global?page=${page}&limit=${limit}`);
   },
 };
 

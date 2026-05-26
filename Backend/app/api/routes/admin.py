@@ -254,12 +254,13 @@ async def trigger_scraping(
     query   = random.choice(DEMO_PRODUCTS)
     task_id = str(_uuid.uuid4())
 
-    # Crear el historial asociado al admin que disparó el scraping
+    # Crear el historial asociado al admin, marcado como global para todos los usuarios
     history = SearchHistory(
         user_id=admin.id,
         task_id=task_id,
         query=query,
         status=TaskStatus.pending,
+        triggered_by_admin=True,  # visible para TODOS los usuarios en su dashboard
     )
     db.add(history)
     await db.commit()

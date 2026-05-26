@@ -64,6 +64,7 @@ class SearchHistory(Base, TimestampMixin):
     status: Mapped[TaskStatus] = mapped_column(SAEnum(TaskStatus), default=TaskStatus.pending)
     image_url: Mapped[str | None] = mapped_column(String(1000), nullable=True)
     error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
+    triggered_by_admin: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
 
     user = relationship("User", back_populates="searches")
     product = relationship("Product", back_populates="searches")

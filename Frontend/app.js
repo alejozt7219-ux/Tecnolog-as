@@ -624,18 +624,55 @@ function _renderApiResults(prices) {
 /* ═══════════════════ DASHBOARD REAL ═══════════════════ */
 async function _loadDashboard() {
   try {
-    const history = await ApiScan.getHistory(1, 5);
-    if (history?.length) _renderDashboardHistory(history);
-    // Animar stats con los reales si los tenemos
-    countTo('cnt-products', history?.length || 0, 800);
+    // getGlobalHistory: propias del usuario + scrapings manuales del admin (visibles a todos)
+    const history = await ApiScan.getGlobalHistory(1, 10);
+    if (history?.length) {
+      // Filtrar solo las que tienen producto asociado (status done)
+      const done = history.filter(h => h.product && h.status === 'done');
+      if (done.length) {
+        _renderDashboardHistory(done.slice(0, 5));
+        countTo('cnt-products', done.length, 800);
+      } else {
+        _renderDashboardFromCache();
+        countTo('cnt-products', Object.keys(CACHED_PRICES).length, 800);
+      }
+    } else {
+      // Sin historial real — mostrar productos demo del cache
+      _renderDashboardFromCache();
+      countTo('cnt-products', Object.keys(CACHED_PRICES).length, 800);
+    }
     countTo('cnt-stores', 5, 600);
     countTo('cnt-ops', 0, 600);
   } catch (_) {
-    // Si falla, animar con ceros (no con datos inventados)
-    countTo('cnt-products', 0, 600);
-    countTo('cnt-stores', 0, 600);
+    _renderDashboardFromCache();
+    countTo('cnt-products', Object.keys(CACHED_PRICES).length, 600);
+    countTo('cnt-stores', 5, 600);
     countTo('cnt-ops', 0, 600);
   }
+}
+
+function _renderDashboardFromCache() {
+  const tableWrap = document.querySelector('#page-dashboard .table-wrap');
+  if (!tableWrap) return;
+  const tbody = tableWrap.querySelector('tbody');
+  if (!tbody) return;
+  tbody.innerHTML = '';
+  Object.entries(CACHED_PRICES).forEach(([key, data]) => {
+    const tr = document.createElement('tr');
+    const bestPrice = data.prices?.length
+      ? Math.min(...data.prices.map(p => p.price)).toLocaleString('es-CO', { style: 'currency', currency: 'COP', maximumFractionDigits: 0 })
+      : '—';
+    const storeCount = data.prices?.length || '—';
+    const today = new Date().toLocaleDateString('es-CO');
+    tr.innerHTML = `
+      <td>${data.name}</td>
+      <td><time>${today}</time></td>
+      <td class="price-val">${bestPrice}</td>
+      <td>${storeCount} tiendas</td>
+      <td><button class="link-btn" onclick="goResultsFromHistory(${JSON.stringify(data.prices).replace(/"/g, '&quot;')}, '${data.name.replace(/'/g, "\'")}')">Ver Detalles</button></td>
+    `;
+    tbody.appendChild(tr);
+  });
 }
 
 /* FIX: actualiza la tabla de búsquedas recientes del dashboard con datos reales */
@@ -834,10 +871,7 @@ async function _loadAdminScraping() {
     if (logs?.length) _renderScrapingLogs(logs);
     // Mostrar/ocultar botón reset según si hay scrapings manuales del admin
     const resetBtn = document.getElementById('btn-reset-demo');
-    if (resetBtn) {
-      const hasManual = logs?.some(l => l.query);
-      resetBtn.style.display = hasManual ? 'inline-flex' : 'none';
-    }
+    if (resetBtn) resetBtn.style.display = 'inline-flex';
   } catch (_) {}
 }
 
@@ -1147,9 +1181,10 @@ async function _pollDashboardUpdate(taskId, attempts = 0) {
         row.cells[3].textContent = priceCount;
         row.cells[4].textContent = durStr;
       }
-      // Recargar historial — el nuevo producto ya está en BD
-      const history = await ApiScan.getHistory(1, 5);
-      if (history?.length) _renderDashboardHistory(history);
+      // Recargar historial global — incluye el scraping del admin recién terminado
+      const history = await ApiScan.getGlobalHistory(1, 10);
+      const done = history?.filter(h => h.product && h.status === 'done') || [];
+      if (done.length) _renderDashboardHistory(done.slice(0, 5));
       showToast('¡Listo!', `Precios de "${result.product?.name || taskId}" actualizados 🎉`);
       return;
     }
@@ -1504,6 +1539,15 @@ window.analyzePrice = async function() {
       showToast('¡Análisis completo!', `${activeResults.length} precio${activeResults.length!==1?'s':''} encontrado${activeResults.length!==1?'s':''}`);
     }, 600);
 
+    // Refrescar dashboard en background para que la nueva búsqueda aparezca en historial
+    setTimeout(async () => {
+      try {
+        const hist = await ApiScan.getGlobalHistory(1, 10);
+        const done = hist?.filter(h => h.product && h.status === 'done') || [];
+        if (done.length) _renderDashboardHistory(done.slice(0, 5));
+      } catch (_) {}
+    }, 1500);
+
   } catch (err) {
     _hideAttrsAll();
     document.getElementById('attrs-placeholder').style.display = 'block';
@@ -1788,4 +1832,23 @@ const _origLoadDashboard = _loadDashboard;
 window._loadDashboard = async function() {
   await _origLoadDashboard();
   renderPriceChart(DEMO_CHART_DATA);
+};
+
+// Cuando el usuario vuelve al dashboard desde admin, refrescar historial global
+const _origShowScreen = showScreen;
+window.showScreen = function(id) {
+  _origShowScreen(id);
+  if (id === 'app') {
+    // Pequeño delay para que la animación de transición termine
+    setTimeout(async () => {
+      try {
+        const hist = await ApiScan.getGlobalHistory(1, 10);
+        const done = hist?.filter(h => h.product && h.status === 'done') || [];
+        if (done.length) {
+          _renderDashboardHistory(done.slice(0, 5));
+          countTo('cnt-products', done.length, 800);
+        }
+      } catch (_) {}
+    }, 300);
+  }
 };

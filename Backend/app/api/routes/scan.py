@@ -93,7 +93,10 @@ async def get_results(
 ):
     result = await db.execute(
         select(SearchHistory)
-        .where(SearchHistory.task_id == task_id, SearchHistory.user_id == current_user.id)
+        .where(
+            SearchHistory.task_id == task_id,
+        )
+        # Admin tasks can be polled by any authenticated user
         .options(
             selectinload(SearchHistory.product).selectinload(Product.prices).selectinload(PriceResult.store)
         )
@@ -148,6 +151,40 @@ async def get_history(
     result = await db.execute(
         select(SearchHistory)
         .where(SearchHistory.user_id == current_user.id)
+        .options(
+            selectinload(SearchHistory.product)
+            .selectinload(Product.prices)
+            .selectinload(PriceResult.store)
+        )
+        .order_by(SearchHistory.created_at.desc())
+        .offset(offset)
+        .limit(limit)
+    )
+    return result.scalars().all()
+
+@router.get("/history/global", response_model=list[SearchHistoryOut])
+async def get_global_history(
+    page: int = Query(1, ge=1),
+    limit: int = Query(20, ge=1, le=100),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Historial combinado para el dashboard:
+    - Búsquedas propias del usuario
+    - Scrapings manuales del admin (triggered_by_admin=True), visibles para todos
+    Ordenado por fecha descendente sin duplicados.
+    """
+    from sqlalchemy import or_
+    offset = (page - 1) * limit
+    result = await db.execute(
+        select(SearchHistory)
+        .where(
+            or_(
+                SearchHistory.user_id == current_user.id,
+                SearchHistory.triggered_by_admin == True,
+            )
+        )
         .options(
             selectinload(SearchHistory.product)
             .selectinload(Product.prices)
