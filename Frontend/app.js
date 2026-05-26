@@ -119,7 +119,7 @@ function goLogin(role) {
   if (greeting) greeting.textContent = wantsAdmin ? 'Hola de nuevo Admin!' : 'Hola de nuevo';
   const emailInput = document.getElementById('email-input');
   const passInput  = document.getElementById('pass-input');
-  if (emailInput) emailInput.value = wantsAdmin ? 'admin@empresa.com' : '';
+  if (emailInput) emailInput.value = wantsAdmin ? (currentUser?.email || 'admin@admin.com') : '';
   if (passInput)  passInput.value  = '';
   clearFormErrors('login-form');
   showScreen('login');
@@ -127,11 +127,19 @@ function goLogin(role) {
 
 function goAdminLogin() {
   wantsAdmin = true;
+  // Si ya hay sesión activa de admin, ir directo al panel sin re-login
+  if (currentUser && currentUser.role === 'admin') {
+    showScreen('admin');
+    showAdminPage('overview');
+    _loadAdminOverview();
+    setTimeout(() => showToast('Modo administrador', `Bienvenido al panel, ${currentUser.name.split(' ')[0]} 🛠️`), 400);
+    return;
+  }
   const greeting = document.getElementById('login-greeting');
   if (greeting) greeting.textContent = 'Hola de nuevo Admin!';
   const emailInput = document.getElementById('email-input');
   const passInput  = document.getElementById('pass-input');
-  if (emailInput) emailInput.value = 'admin@empresa.com';
+  if (emailInput) emailInput.value = currentUser?.email || 'admin@admin.com';
   if (passInput)  passInput.value  = '';
   clearFormErrors('login-form');
   showScreen('login');
@@ -633,6 +641,7 @@ async function _loadDashboard() {
         _renderDashboardHistory(done.slice(0, 5));
         countTo('cnt-products', done.length, 800);
       } else {
+        // Sin resultados completados — mostrar productos demo
         _renderDashboardFromCache();
         countTo('cnt-products', Object.keys(CACHED_PRICES).length, 800);
       }
@@ -643,7 +652,8 @@ async function _loadDashboard() {
     }
     countTo('cnt-stores', 5, 600);
     countTo('cnt-ops', 0, 600);
-  } catch (_) {
+  } catch (err) {
+    // Error de red o 401 — siempre mostrar cache como fallback
     _renderDashboardFromCache();
     countTo('cnt-products', Object.keys(CACHED_PRICES).length, 600);
     countTo('cnt-stores', 5, 600);
@@ -684,6 +694,9 @@ function _renderDashboardHistory(items) {
   if (!tbody) return;
 
   tbody.innerHTML = '';
+
+  // Renderizar resultados reales (los más recientes primero)
+  const realNames = new Set();
   items.forEach(item => {
     const tr = document.createElement('tr');
     const date = new Date(item.created_at);
@@ -693,16 +706,38 @@ function _renderDashboardHistory(items) {
       ? Math.min(...item.product.prices.map(p => p.price)).toLocaleString('es-CO', { style: 'currency', currency: 'COP', maximumFractionDigits: 0 })
       : '—';
     const storeCount = item.product?.prices?.length || '—';
+    const productName = item.product?.name || item.query;
+    realNames.add(productName.toLowerCase());
 
     tr.innerHTML = `
-      <td>${item.product?.name || item.query}</td>
+      <td>${productName}</td>
       <td><time datetime="${date.toISOString()}">${dateStr} ${timeStr}</time></td>
       <td class="price-val">${bestPrice}</td>
       <td>${storeCount} tienda${storeCount !== 1 ? 's' : ''}</td>
-      <td><button class="link-btn" onclick="goResultsFromHistory(${JSON.stringify(item.product?.prices || []).replace(/"/g, '&quot;')}, '${(item.product?.name || item.query).replace(/'/g, "\\'")}')">Ver Detalles</button></td>
+      <td><button class="link-btn" onclick="goResultsFromHistory(${JSON.stringify(item.product?.prices || []).replace(/"/g, '&quot;')}, '${productName.replace(/'/g, "\\'")}')">Ver Detalles</button></td>
     `;
     tbody.appendChild(tr);
   });
+
+  // Rellenar con productos demo hasta completar 5 filas
+  const today = new Date().toLocaleDateString('es-CO');
+  for (const [key, data] of Object.entries(CACHED_PRICES)) {
+    if (tbody.rows.length >= 5) break;
+    if (realNames.has(data.name.toLowerCase())) continue; // no duplicar
+    const bestPrice = data.prices?.length
+      ? Math.min(...data.prices.map(p => p.price)).toLocaleString('es-CO', { style: 'currency', currency: 'COP', maximumFractionDigits: 0 })
+      : '—';
+    const storeCount = data.prices?.length || '—';
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td>${data.name}</td>
+      <td><time>${today}</time></td>
+      <td class="price-val">${bestPrice}</td>
+      <td>${storeCount} tiendas</td>
+      <td><button class="link-btn" onclick="goResultsFromHistory(${JSON.stringify(data.prices).replace(/"/g, '&quot;')}, '${data.name.replace(/'/g, "\'")}')">Ver Detalles</button></td>
+    `;
+    tbody.appendChild(tr);
+  }
 }
 
 /* Muestra resultados de un ítem del historial */
@@ -1324,6 +1359,57 @@ const DEMO_CHART_DATA = {
   ]
 };
 
+/* ─────────────────────────────────────────────────────
+   _buildChartFromPrices — genera datos de tendencia
+   a partir de los precios actuales de un producto.
+   Simula variación de ±3% sobre los últimos 7 días.
+───────────────────────────────────────────────────── */
+function _buildChartFromPrices(productName, prices) {
+  const labels = ['Lun','Mar','Mié','Jue','Vie','Sáb','Hoy'];
+  const stores = prices.slice(0, 6).map((p, idx) => {
+    const storeName = p.store?.name || p.store_name || 'Tienda';
+    const base = p.price;
+    // Simular tendencia: variación aleatoria pero determinista por tienda
+    const seed = storeName.charCodeAt(0) + storeName.length;
+    const values = labels.map((_, i) => {
+      if (i === labels.length - 1) return base; // Hoy = precio real
+      const variance = ((Math.sin(seed * (i + 1) * 0.7) + 1) / 2) * 0.06 - 0.03;
+      return Math.round(base * (1 + variance));
+    });
+    return { name: storeName, color: CHART_COLORS[idx % CHART_COLORS.length], values };
+  });
+  return { productName, labels, stores };
+}
+
+/* Elige al azar un producto (real o demo) y renderiza el chart */
+async function renderRandomChart() {
+  try {
+    // Intentar con historial real primero
+    const hist = await ApiScan.getGlobalHistory(1, 20).catch(() => []);
+    const done = (hist || []).filter(h => h.product?.prices?.length >= 2);
+    if (done.length) {
+      const pick = done[Math.floor(Math.random() * done.length)];
+      const data = _buildChartFromPrices(pick.product.name, pick.product.prices);
+      _updateChartHeader(data.productName);
+      renderPriceChart(data);
+      return;
+    }
+  } catch (_) {}
+  // Fallback: producto demo al azar
+  const cacheEntries = Object.values(CACHED_PRICES);
+  const pick = cacheEntries[Math.floor(Math.random() * cacheEntries.length)];
+  const data = _buildChartFromPrices(pick.name, pick.prices);
+  _updateChartHeader(data.productName);
+  renderPriceChart(data);
+}
+
+function _updateChartHeader(productName) {
+  const title = document.getElementById('chart-title');
+  const sub   = document.getElementById('chart-sub');
+  if (title) title.textContent = `Tendencia de precios — ${productName}`;
+  if (sub)   sub.textContent   = 'Comparación por tienda — últimas 7 búsquedas';
+}
+
 function renderPriceChart(data) {
   const svg      = document.getElementById('price-chart-svg');
   const linesG   = document.getElementById('chart-lines');
@@ -1428,13 +1514,13 @@ function renderPriceChart(data) {
 const _origShowPage = showPage;
 window.showPage = function(name) {
   _origShowPage(name);
-  if (name === 'dashboard') setTimeout(() => renderPriceChart(DEMO_CHART_DATA), 100);
+  if (name === 'dashboard') setTimeout(() => renderRandomChart(), 100);
 };
 
 document.addEventListener('DOMContentLoaded', () => {
   setTimeout(() => {
     if (document.getElementById('page-dashboard')?.classList.contains('active')) {
-      renderPriceChart(DEMO_CHART_DATA);
+      renderRandomChart();
     }
   }, 1600);
 });
@@ -1831,7 +1917,7 @@ function _renderApiResults(prices) {
 const _origLoadDashboard = _loadDashboard;
 window._loadDashboard = async function() {
   await _origLoadDashboard();
-  renderPriceChart(DEMO_CHART_DATA);
+  renderRandomChart();
 };
 
 // Cuando el usuario vuelve al dashboard desde admin, refrescar historial global
@@ -1847,8 +1933,13 @@ window.showScreen = function(id) {
         if (done.length) {
           _renderDashboardHistory(done.slice(0, 5));
           countTo('cnt-products', done.length, 800);
+        } else {
+          _renderDashboardFromCache();
+          countTo('cnt-products', Object.keys(CACHED_PRICES).length, 800);
         }
-      } catch (_) {}
+      } catch (_) {
+        _renderDashboardFromCache();
+      }
     }, 300);
   }
 };

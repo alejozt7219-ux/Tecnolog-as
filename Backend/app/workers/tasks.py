@@ -114,8 +114,20 @@ def scrape_product(self, task_id: str, query: str, search_history_id):
             product = Product(name=query, normalized_name=normalized)
             db.add(product)
             db.flush()
+        else:
+            # Limpiar precios anteriores para evitar acumulación
+            from sqlalchemy import delete
+            db.execute(delete(PriceResult).where(PriceResult.product_id == product.id))
+            db.flush()
 
+        # Deduplicar: quedarse con el precio más bajo por tienda
+        best_by_store = {}
         for scraped in all_results:
+            key = scraped.store_name.lower()
+            if key not in best_by_store or scraped.price < best_by_store[key].price:
+                best_by_store[key] = scraped
+
+        for scraped in best_by_store.values():
             store = db.execute(
                 select(Store).where(Store.name == scraped.store_name)
             ).scalar_one_or_none()
