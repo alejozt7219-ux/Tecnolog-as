@@ -485,8 +485,8 @@
         <div class="chart-card">
           <div class="chart-header">
             <div>
-              <div class="chart-title">Tendencia de precios</div>
-              <div class="chart-sub">Comparación por tienda — últimas 7 búsquedas</div>
+              <div class="chart-title" id="chart-title">Tendencia de precios</div>
+              <div class="chart-sub" id="chart-sub">Comparación por tienda — últimas 7 búsquedas</div>
             </div>
             <div class="chart-legend" id="chart-legend">
               <div class="legend-item"><span class="legend-dot" style="background:#7c6fff"></span>Falabella</div>
@@ -534,7 +534,6 @@
 
       <div class="section-header">
         <h2 class="section-title">Búsquedas recientes</h2>
-        <button class="btn-sm" onclick="showPage('visual')">+ Nueva búsqueda</button>
       </div>
       <div class="table-wrap" role="region" aria-label="Historial de búsquedas recientes">
         <table>
@@ -1065,42 +1064,7 @@
               <th scope="col">Estado</th>
             </tr>
           </thead>
-          <tbody>
-            <tr>
-              <td><div class="act-icon" aria-hidden="true"><svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" focusable="false"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg></div></td>
-              <td>Scraping automático completado – 5789 productos</td>
-              <td style="color:var(--muted)">Scraping</td>
-              <td style="color:var(--muted)"><time datetime="2026-02-25T08:34">25/02/2026 08:34</time></td>
-              <td><span class="status-badge s-green">Exitoso</span></td>
-            </tr>
-            <tr>
-              <td><div class="act-icon" aria-hidden="true"><svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" focusable="false"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg></div></td>
-              <td>Usuario Carlos Rodríguez inició sesión</td>
-              <td style="color:var(--muted)">Usuario</td>
-              <td style="color:var(--muted)"><time datetime="2026-02-25T10:20">25/02/2026 10:20</time></td>
-              <td><span class="sr-only">Sin estado especial</span></td>
-            </tr>
-            <tr>
-              <td><div class="act-icon" aria-hidden="true"><svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" focusable="false"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg></div></td>
-              <td>Tienda Mercado Libre marcada como Inactiva</td>
-              <td style="color:var(--muted)">Tienda</td>
-              <td style="color:var(--muted)"><time datetime="2026-02-25T09:15">25/02/2026 09:15</time></td>
-              <td><span class="sr-only">Sin estado especial</span></td>
-            </tr>
-            <tr>
-              <td><div class="act-icon" aria-hidden="true"><svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" focusable="false"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg></div></td>
-              <td>Scraping manual ejecutado por María González</td>
-              <td style="color:var(--muted)">Scraping</td>
-              <td style="color:var(--muted)"><time datetime="2026-02-24T15:30">24/02/2026 15:30</time></td>
-              <td><span class="status-badge s-green">Exitoso</span></td>
-            </tr>
-            <tr>
-              <td><div class="act-icon" aria-hidden="true"><svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" focusable="false"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg></div></td>
-              <td>Usuario Patricia Díaz desactivado</td>
-              <td style="color:var(--muted)">Usuario</td>
-              <td style="color:var(--muted)"><time datetime="2026-02-24T12:00">24/02/2026 12:00</time></td>
-              <td><span class="status-badge s-amber">Advertencia</span></td>
-            </tr>
+          <tbody id="activity-tbody">
           </tbody>
         </table>
       </div>
@@ -1248,19 +1212,13 @@
             <tr>
               <th scope="col">Fecha y hora</th>
               <th scope="col">Estado</th>
-              <th scope="col">Productos extraídos</th>
+              <th scope="col">Producto</th>
               <th scope="col">Errores</th>
-              <th scope="col">Duración</th>
+              <th scope="col">Fuente</th>
               <th scope="col">Acciones</th>
             </tr>
           </thead>
           <tbody id="scraping-history-tbody">
-            <tr><td><time datetime="2026-02-25T15:40">25-02-2026, 03:40 p.m.</time></td><td><span class="status-badge s-green">Completado</span></td><td style="color:var(--green)">5226</td><td>0</td><td style="color:var(--muted)">3m 50s</td><td><button class="link-btn" onclick="showToast('Logs','Abriendo logs…')">Ver logs</button></td></tr>
-            <tr><td><time datetime="2026-02-25T08:30">25/02/2026 08:30</time></td><td><span class="status-badge s-green">Completado</span></td><td style="color:var(--green)">5789</td><td>0</td><td style="color:var(--muted)">4m 32s</td><td><button class="link-btn" onclick="showToast('Logs','Abriendo logs…')">Ver logs</button></td></tr>
-            <tr><td><time datetime="2026-02-24T08:30">24/02/2026 08:30</time></td><td><span class="status-badge s-red">Error</span></td><td>5654</td><td style="color:var(--red)">2</td><td style="color:var(--muted)">4m 45s</td><td><button class="link-btn" onclick="showToast('Logs','Abriendo logs…')">Ver logs</button></td></tr>
-            <tr><td><time datetime="2026-02-23T08:30">23/02/2026 08:30</time></td><td><span class="status-badge s-green">Completado</span></td><td style="color:var(--green)">5701</td><td>0</td><td style="color:var(--muted)">4m 28s</td><td><button class="link-btn" onclick="showToast('Logs','Abriendo logs…')">Ver logs</button></td></tr>
-            <tr><td><time datetime="2026-02-22T08:30">22/02/2026 08:30</time></td><td><span class="status-badge s-red">Error</span></td><td>2234</td><td style="color:var(--red)">15</td><td style="color:var(--muted)">2m 10s</td><td><button class="link-btn" onclick="showToast('Logs','Abriendo logs…')">Ver logs</button></td></tr>
-            <tr><td><time datetime="2026-02-21T08:30">21/02/2026 08:30</time></td><td><span class="status-badge s-red">Error</span></td><td>5623</td><td style="color:var(--red)">1</td><td style="color:var(--muted)">4m 28s</td><td><button class="link-btn" onclick="showToast('Logs','Abriendo logs…')">Ver logs</button></td></tr>
           </tbody>
         </table>
       </div>

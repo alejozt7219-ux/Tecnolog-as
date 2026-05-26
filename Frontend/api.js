@@ -206,4 +206,7 @@ const ApiAdmin = {
   async triggerScraping() {
     return apiFetch('/admin/scraping/trigger', { method: 'POST' });
   },
+  async getScrapingHistory(page = 1) {
+    return apiFetch(`/admin/scraping/history?page=${page}`);
+  },
 };

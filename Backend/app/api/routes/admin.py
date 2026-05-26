@@ -366,3 +366,35 @@ async def scraping_logs(
         .limit(limit)
     )
     return result.scalars().all()
+
+
+@router.get("/scraping/history")
+async def scraping_history(
+    page: int = Query(1, ge=1),
+    limit: int = Query(50, ge=1, le=200),
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(require_admin),
+):
+    """Historial real de scrapings basado en SearchHistory — incluye manuales y de usuario."""
+    from sqlalchemy.orm import selectinload
+    offset = (page - 1) * limit
+    result = await db.execute(
+        select(SearchHistory)
+        .options(selectinload(SearchHistory.user))
+        .order_by(SearchHistory.created_at.desc())
+        .offset(offset)
+        .limit(limit)
+    )
+    histories = result.scalars().all()
+    return [
+        {
+            "id": h.id,
+            "task_id": h.task_id,
+            "query": h.query,
+            "status": h.status,
+            "triggered_by_admin": h.triggered_by_admin,
+            "created_at": h.created_at.isoformat(),
+            "user_name": h.user.name if h.user else None,
+        }
+        for h in histories
+    ]

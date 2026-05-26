@@ -121,9 +121,15 @@ def scrape_product(self, task_id: str, query: str, search_history_id):
             db.flush()
 
         # Deduplicar: quedarse con el precio más bajo por tienda
+        # Normalizar nombre de tienda para agrupar variantes (e.g. 'Mercado Libre' == 'MercadoLibre')
+        import re as _re
+        def _norm_store(name):
+            n = unicodedata.normalize('NFKD', name).lower()
+            return _re.sub(r'[^a-z0-9]', '', n)
+
         best_by_store = {}
         for scraped in all_results:
-            key = scraped.store_name.lower()
+            key = _norm_store(scraped.store_name)
             if key not in best_by_store or scraped.price < best_by_store[key].price:
                 best_by_store[key] = scraped
 
