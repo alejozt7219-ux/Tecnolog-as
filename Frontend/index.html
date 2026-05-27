@@ -1226,26 +1226,35 @@
       <ul class="stats-grid" role="list" aria-label="Estadísticas de scraping">
         <li class="stat-card" role="listitem" id="schedule-card" style="grid-column:span 2">
           <div class="stat-label">Frecuencia programada</div>
-          <div id="schedule-display" style="display:flex;align-items:center;gap:12px;margin-top:6px">
+
+          <!-- DISPLAY MODE -->
+          <div id="schedule-display" style="display:flex;align-items:center;gap:12px;margin-top:8px;flex-wrap:wrap">
             <div class="stat-val" style="font-size:22px" id="sched-display-freq">Diaria</div>
-            <span class="stat-tag tag-muted" style="font-size:11px" id="sched-display-time">08:30 AM</span>
+            <span class="stat-tag tag-muted" style="font-size:12px;padding:4px 10px" id="sched-display-time">08:30 p. m.</span>
             <span class="status-badge s-green" id="sched-display-status">Activo</span>
-            <button class="btn-sm" style="margin-left:auto" onclick="openScheduleEditor()" aria-label="Editar frecuencia de scraping">✏️ Editar</button>
+            <button class="btn-sm" style="margin-left:auto;display:inline-flex;align-items:center;gap:6px" onclick="openScheduleEditor()" aria-label="Editar frecuencia de scraping">
+              <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+              Editar
+            </button>
           </div>
-          <div id="schedule-editor" style="display:none;margin-top:10px">
+
+          <!-- EDIT MODE -->
+          <div id="schedule-editor" style="display:none;margin-top:12px">
             <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
-              <select id="sched-freq" style="background:var(--card2);color:var(--text);border:1px solid var(--border);border-radius:8px;padding:6px 10px;font-size:13px" aria-label="Frecuencia de scraping">
+              <select id="sched-freq" class="sched-input" aria-label="Frecuencia de scraping">
                 <option value="daily">Diaria</option>
                 <option value="disabled">Desactivado</option>
               </select>
-              <label style="font-size:13px;color:var(--muted)">Hora:</label>
-              <input type="time" id="sched-time" value="08:30"
-                style="background:var(--card2);color:var(--text);border:1px solid var(--border);border-radius:8px;padding:6px 10px;font-size:13px"
+              <span style="font-size:13px;color:var(--muted)">Hora:</span>
+              <input type="time" id="sched-time" value="08:30" class="sched-input"
                 aria-label="Hora de ejecución del scraping programado" />
-              <button class="btn-sm" onclick="saveSchedule()" style="background:var(--accent);color:#fff;border:none" id="sched-save-btn">Guardar</button>
+              <button class="btn-sm" onclick="saveSchedule()" style="background:var(--accent);color:#fff;border-color:var(--accent)" id="sched-save-btn">Guardar</button>
               <button class="btn-sm" onclick="closeScheduleEditor()" style="color:var(--muted)">Cancelar</button>
             </div>
-            <p style="font-size:11px;color:var(--muted);margin-top:8px">⚠️ Solo aplica a los 5 productos predeterminados. Requiere que el worker de Celery Beat esté corriendo.</p>
+            <p style="font-size:11px;color:var(--muted);margin-top:10px;display:flex;align-items:center;gap:5px">
+              <svg xmlns="http://www.w3.org/2000/svg" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;color:#f5a623"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+              Solo aplica a los 5 productos predeterminados.
+            </p>
           </div>
         </li>
         <li class="stat-card" role="listitem"><div class="stat-label">Última ejecución</div><div class="stat-val" style="font-size:20px" id="last-execution-date" aria-live="polite">—</div><span class="status-badge s-green" style="margin-top:6px" id="last-execution-status">—</span></li>

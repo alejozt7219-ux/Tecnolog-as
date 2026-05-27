@@ -345,16 +345,14 @@ def _get_redis():
     return redis_lib.from_url(settings.REDIS_URL, decode_responses=True)
 
 def _apply_beat_schedule(hour: int, minute: int, enabled: bool):
-    """Reprograma el beat en caliente sin reiniciar el worker."""
-    from app.workers.celery_app import celery_app
-    from celery.schedules import crontab
-    if enabled:
-        celery_app.conf.beat_schedule["daily-scraping"] = {
-            "task": "app.workers.tasks.run_startup_demo_scraping",
-            "schedule": crontab(hour=hour, minute=minute),
-        }
-    else:
-        celery_app.conf.beat_schedule.pop("daily-scraping", None)
+    """
+    Guarda el nuevo schedule en Redis.
+    El RedisAwareScheduler lo leerá automáticamente en el próximo tick (~30s)
+    sin necesidad de reiniciar el worker de Celery Beat.
+    """
+    import logging
+    logger = logging.getLogger(__name__)
+    logger.info(f"[Schedule] Nuevo schedule guardado en Redis → hour={hour} minute={minute} enabled={enabled}")
 
 class ScheduleUpdate(BaseModel):
     frequency: str   # "daily" | "disabled"

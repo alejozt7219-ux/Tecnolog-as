@@ -60,8 +60,10 @@ services:
     build:
       context: ./Backend
       dockerfile: Dockerfile
-    command: celery -A app.workers.celery_app beat --loglevel=info
+    command: celery -A app.workers.celery_app beat --loglevel=info --scheduler app.workers.redis_scheduler:RedisAwareScheduler
     env_file: ./Backend/.env
+    volumes:
+      - ./Backend:/app
     depends_on:
       - redis
 

@@ -21,7 +21,6 @@ def _load_schedule_from_redis():
         pass
     return {"frequency": "daily", "hour": 8, "minute": 30, "enabled": True}
 
-_sched = _load_schedule_from_redis()
 
 celery_app.conf.update(
     task_serializer="json",
@@ -33,13 +32,10 @@ celery_app.conf.update(
     task_acks_late=True,
     worker_prefetch_multiplier=1,
     broker_connection_retry_on_startup=True,
+    # Usar nuestro scheduler personalizado que lee Redis en cada tick
+    beat_scheduler="app.workers.redis_scheduler:RedisAwareScheduler",
     beat_schedule={
-        # Scraping diario — hora leída de Redis (default 08:30)
-        **({"daily-scraping": {
-            "task": "app.workers.tasks.run_startup_demo_scraping",
-            "schedule": crontab(hour=_sched["hour"], minute=_sched["minute"]),
-        }} if _sched.get("enabled", True) else {}),
-        # Startup demo: corre una vez al día a las 00:01
+        # Startup demo: corre una vez al día a las 00:01 para mantener datos frescos
         "startup-demo-daily": {
             "task": "app.workers.tasks.run_startup_demo_scraping",
             "schedule": crontab(hour=0, minute=1),
