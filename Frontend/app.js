@@ -330,6 +330,9 @@ function logout() {
   currentFile = null;
   wantsAdmin  = false;
   _clearSearchState();
+  if (typeof _dashboardPollTimer !== 'undefined' && _dashboardPollTimer) {
+    clearTimeout(_dashboardPollTimer); _dashboardPollTimer = null;
+  }
   resetUpload();
   showPage('dashboard');
   showScreen('landing');
@@ -568,28 +571,66 @@ function _renderApiResults(prices) {
 }
 
 /* ═══════════════════ DASHBOARD REAL ═══════════════════ */
+
+/* Polling continuo: reintenta hasta que haya resultados 'done' o se agoten los intentos.
+   Intervalo progresivo: 4s, 6s, 8s, 10s, 10s, 10s… (máx 20 intentos ≈ ~3min) */
+let _dashboardPollTimer = null;
+function _startDashboardPolling(attempt = 0) {
+  if (_dashboardPollTimer) return; // ya hay un poll activo
+  const MAX_ATTEMPTS = 20;
+  if (attempt >= MAX_ATTEMPTS) return;
+  const delay = Math.min(4000 + attempt * 2000, 10000);
+  _dashboardPollTimer = setTimeout(async () => {
+    _dashboardPollTimer = null;
+    try {
+      const history = await ApiScan.getGlobalHistory(1, 10);
+      const completedStates = ['done', 'success', 'completed'];
+      const done = (history || []).filter(
+        h => h.product && completedStates.includes(String(h.status || '').toLowerCase())
+      );
+      if (done.length > 0) {
+        // ¡Llegaron resultados reales! Actualizar dashboard.
+        _renderDashboardHistory(done.slice(0, 5));
+        countTo('cnt-products', done.length, 400);
+        localStorage.setItem('pv-dashboard-history', JSON.stringify(done));
+      } else {
+        // Todavía pendiente — seguir haciendo polling
+        _startDashboardPolling(attempt + 1);
+      }
+    } catch (_) {
+      _startDashboardPolling(attempt + 1);
+    }
+  }, delay);
+}
+
 async function _loadDashboard() {
+  // Cancelar cualquier poll anterior al cargar el dashboard
+  if (_dashboardPollTimer) { clearTimeout(_dashboardPollTimer); _dashboardPollTimer = null; }
   try {
     // getGlobalHistory: propias del usuario + scrapings manuales del admin (visibles a todos)
     const history = await ApiScan.getGlobalHistory(1, 10);
     if (history?.length) {
       // Filtrar solo las que tienen producto asociado (status done)
-      const done = history.filter(h => h.product && h.status === 'done');
+      const completedStates = ['done', 'success', 'completed'];
+      const done = history.filter(
+        h => h.product && completedStates.includes(String(h.status || '').toLowerCase())
+      );
       if (done.length) {
         _renderDashboardHistory(done.slice(0, 5));
         countTo('cnt-products', done.length, 800);
       } else {
-        // Hay historial pero ninguno completado aún (están en proceso)
-        // Mostrar cache mientras esperan y hacer polling para actualizar
+        // Hay historial pero los scrapers aún no terminan — mostrar cache
+        // y arrancar polling continuo que actualizará cuando lleguen los datos reales
         _renderDashboardFromCache();
         countTo('cnt-products', Object.keys(CACHED_PRICES).length, 800);
-        // Reintentar en 5s por si alguno termina pronto
-        setTimeout(() => _refreshDashboardIfReady(), 5000);
+        _startDashboardPolling(0);
       }
     } else {
-      // Sin historial real — mostrar productos demo del cache
+      // Sin historial real todavía — mostrar cache y arrancar polling
+      // (el startup scraping puede estar en cola y llegar en segundos)
       _renderDashboardFromCache();
       countTo('cnt-products', Object.keys(CACHED_PRICES).length, 800);
+      _startDashboardPolling(0);
     }
     countTo('cnt-stores', 5, 600);
     countTo('cnt-ops', 0, 600);
@@ -2126,16 +2167,25 @@ const _showScreenBase = showScreen;
 window.showScreen = function showScreenExtended(id) {
   _showScreenBase(id);
   if (id === 'app') {
+    // Cancelar poll anterior si lo había
+    if (typeof _dashboardPollTimer !== 'undefined' && _dashboardPollTimer) {
+      clearTimeout(_dashboardPollTimer); _dashboardPollTimer = null;
+    }
     setTimeout(async () => {
       try {
+        const completedStates = ['done', 'success', 'completed'];
         const hist = await ApiScan.getGlobalHistory(1, 10);
-        const done = (hist || []).filter(h => h.product && h.status === 'done');
+        const done = (hist || []).filter(
+          h => h.product && completedStates.includes(String(h.status || '').toLowerCase())
+        );
         if (done.length) {
           _renderDashboardHistory(done.slice(0, 5));
           countTo('cnt-products', done.length, 800);
         } else {
           _renderDashboardFromCache();
           countTo('cnt-products', Object.keys(CACHED_PRICES).length, 800);
+          // Arrancar polling por si el scraping acaba de terminar
+          _startDashboardPolling(0);
         }
       } catch (_) {
         _renderDashboardFromCache();
