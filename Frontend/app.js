@@ -10,8 +10,20 @@ let wantsAdmin     = false;
 let currentUser    = null;
 let currentTaskId  = null;
 let currentFile    = null;
-// Resultados activos (se actualizan tras cada búsqueda real)
+// Resultados activos — ÚNICA fuente de verdad para la pantalla Results
 let activeResults  = [];
+// Último análisis completado — puede mostrarse como banner en Results
+let lastAnalysis   = null; // { name, prices, timestamp }
+
+/* Limpia todo el estado de búsqueda — usar siempre antes de iniciar
+   una nueva búsqueda o al borrar historial */
+function _clearSearchState() {
+  activeResults = [];
+  searchDone    = false;
+  fromHistory   = false;
+  currentTaskId = null;
+  lastAnalysis  = null;
+}
 
 /* ═══════════════════ BOOT ═══════════════════ */
 document.addEventListener('DOMContentLoaded', async () => {
@@ -314,12 +326,10 @@ async function doRegister() {
 /* ── LOGOUT ──────────────────────────────────────── */
 function logout() {
   ApiAuth.logout();
-  currentUser   = null;
-  currentFile   = null;
-  currentTaskId = null;
-  activeResults = [];
-  searchDone    = false;
-  wantsAdmin    = false;
+  currentUser = null;
+  currentFile = null;
+  wantsAdmin  = false;
+  _clearSearchState();
   resetUpload();
   showPage('dashboard');
   showScreen('landing');
@@ -383,19 +393,8 @@ function showAdminPage(name) {
 }
 
 /* ── Botones "Ver Detalles" del historial del dashboard ── */
-function goResults(product) {
-  const resultsSub = document.getElementById('results-sub');
-  if (resultsSub) resultsSub.textContent = 'Comparación de precios: ' + product;
-  searchDone  = true;
-  fromHistory = true;
-  showPage('results');
-  // Si no hay resultados reales cargados, mostrar estado vacío con mensaje
-  if (activeResults.length === 0) {
-    _renderApiResults([]);
-  } else {
-    _renderApiResults(activeResults);
-  }
-}
+/* goResults — delegado a la versión canónica definida más adelante */
+
 
 /* ═══════════════════ TOAST ═══════════════════ */
 function showToast(title, msg, isError) {
@@ -473,44 +472,7 @@ function handleFile(e) {
   if (currentFile) processImage(currentFile);
 }
 
-function processImage(file) {
-  const r = new FileReader();
-  r.onload = ev => {
-    const img = document.getElementById('preview-img');
-    if (img) {
-      img.src = ev.target.result;
-      img.alt = `Producto cargado para análisis: ${file.name}`;
-    }
-    const uploadState  = document.getElementById('upload-state');
-    const previewState = document.getElementById('preview-state');
-    if (uploadState)  uploadState.style.display  = 'none';
-    if (previewState) {
-      previewState.style.display   = 'block';
-      previewState.style.opacity   = '0';
-      previewState.style.transform = 'translateY(16px)';
-      requestAnimationFrame(() => {
-        previewState.style.transition = 'all .4s ease';
-        previewState.style.opacity    = '1';
-        previewState.style.transform  = 'translateY(0)';
-      });
-    }
-  };
-  r.readAsDataURL(file);
-}
-
-function resetUpload() {
-  searchDone    = false;
-  activeResults = [];
-  currentFile   = null;
-  const uploadState  = document.getElementById('upload-state');
-  const previewState = document.getElementById('preview-state');
-  const fileInput    = document.getElementById('file-input');
-  if (uploadState)  uploadState.style.display  = 'block';
-  if (previewState) previewState.style.display = 'none';
-  if (fileInput)    fileInput.value = '';
-  _resetFilters();
-  showToast('Imagen eliminada', 'Puedes cargar una nueva imagen para analizar');
-}
+/* processImage y resetUpload — definiciones canónicas más abajo (con _clearSearchState) */
 
 function _resetFilters() {
   const fLoc  = document.getElementById('f-loc');
@@ -523,46 +485,12 @@ function _resetFilters() {
   if (fSort) fSort.value = '';
 }
 
-/* ── analyzePrice REAL: manda foto → polling ─── */
-async function analyzePrice() {
-  if (!currentFile) {
-    showToast('Sin imagen', 'Primero carga una imagen para analizar', true);
-    return;
+/* analyzePrice — la versión canónica está declarada como window.analyzePrice más abajo */
+function analyzePrice() {
+  if (typeof window.analyzePrice === 'function' && window.analyzePrice !== analyzePrice) {
+    return window.analyzePrice();
   }
-
-  showLoader('Identificando producto con IA…');
-  try {
-    // 1. Manda la imagen al backend
-    const { task_id } = await ApiScan.scanImage(currentFile);
-    currentTaskId = task_id;
-
-    // 2. Polling hasta que Celery termine
-    const result = await ApiScan.pollResults(task_id, {
-      onProgress: (status) => {
-        const msgs = {
-          pending:    'Buscando precios en tiendas…',
-          processing: 'Scrapeando tiendas en paralelo…',
-        };
-        const loaderText = document.getElementById('loader-text');
-        if (loaderText) loaderText.textContent = msgs[status] || 'Procesando…';
-      },
-    });
-
-    hideLoader();
-    searchDone    = true;
-    activeResults = result.product?.prices || [];
-
-    _resetFilters();
-    const sub = document.getElementById('results-sub');
-    if (sub) sub.textContent = `Comparación de precios: ${result.product?.name || 'Producto'}`;
-
-    showPage('results');
-    _renderApiResults(activeResults);
-
-  } catch (err) {
-    hideLoader();
-    showToast('Error', err.message || 'No se pudo analizar la imagen', true);
-  }
+  showToast('Error', 'Función de análisis no disponible aún', true);
 }
 
 /* ═══════════════════ RESULTS + FILTERS ═══════════════════ */
@@ -765,33 +693,18 @@ function _renderDashboardHistory(items) {
     `;
     tbody.appendChild(tr);
   });
-
-  // Rellenar con productos demo hasta completar 5 filas
-  const today = new Date().toLocaleDateString('es-CO');
-  for (const [key, data] of Object.entries(CACHED_PRICES)) {
-    if (tbody.rows.length >= 5) break;
-    if (realNames.has(data.name.toLowerCase())) continue; // no duplicar
-    const bestPrice = data.prices?.length
-      ? Math.min(...data.prices.map(p => p.price)).toLocaleString('es-CO', { style: 'currency', currency: 'COP', maximumFractionDigits: 0 })
-      : '—';
-    const storeCount = data.prices?.length || '—';
-    const tr = document.createElement('tr');
-    tr.innerHTML = `
-      <td>${data.name}</td>
-      <td><time>${today}</time></td>
-      <td class="price-val">${bestPrice}</td>
-      <td>${storeCount} tiendas</td>
-      <td><button class="link-btn" onclick="goResultsFromHistory(${JSON.stringify(data.prices).replace(/"/g, '&quot;')}, '${data.name.replace(/'/g, "\'")}')">Ver Detalles</button></td>
-    `;
-    tbody.appendChild(tr);
-  }
+  // NO rellenar con demo data: si hay resultados reales solo mostrarlos.
+  // El dashboard con datos reales nunca debe mezclar con CACHED_PRICES.
 }
 
 /* Muestra resultados de un ítem del historial */
 function goResultsFromHistory(prices, productName) {
-  activeResults = prices;
+  // Limpiar estado anterior antes de cargar nuevos resultados
+  activeResults = Array.isArray(prices) ? prices : [];
   searchDone    = true;
   fromHistory   = true;
+  if (typeof lastAnalysis !== 'undefined') lastAnalysis = null;
+  _resetFilters();
   const sub = document.getElementById('results-sub');
   if (sub) sub.textContent = `Comparación de precios: ${productName}`;
   showPage('results');
@@ -1331,7 +1244,7 @@ async function resetDemoProducts() {
   }
 }
 
-async function runScraping() {
+async function runScrapingAdmin() {
   const query = prompt('¿Qué producto deseas scrapear?', '');
   if (!query || !query.trim()) return;
   showLoader('Ejecutando scraping manual…');
@@ -1498,26 +1411,30 @@ const CACHED_PRICES = {
   },
 };
 
-/* goResults ahora carga cache si no hay resultados reales */
+/* goResults — carga precios del cache demo o vacía la pantalla */
 function goResults(product, cacheKey) {
   const cached = cacheKey && CACHED_PRICES[cacheKey];
   if (cached) {
+    // Datos demo explícitos — siempre limpiar el estado anterior
     activeResults = cached.prices;
     searchDone    = true;
     fromHistory   = true;
+    if (typeof lastAnalysis !== 'undefined') lastAnalysis = null;
     const sub = document.getElementById('results-sub');
     if (sub) sub.textContent = 'Comparación de precios: ' + cached.name;
     _resetFilters();
     showPage('results');
     _renderApiResults(activeResults);
   } else {
+    // Sin cacheKey: navegar a Results con los datos activos actuales
+    // (pueden estar vacíos si no se ha buscado nada)
     const resultsSub = document.getElementById('results-sub');
     if (resultsSub) resultsSub.textContent = 'Comparación de precios: ' + product;
     searchDone  = true;
     fromHistory = true;
+    _resetFilters();
     showPage('results');
-    if (activeResults.length === 0) _renderApiResults([]);
-    else _renderApiResults(activeResults);
+    _renderApiResults(activeResults);
   }
 }
 
@@ -1686,11 +1603,11 @@ function renderPriceChart(data) {
 }
 
 /* ────────────────────────────────────────────────
-   OVERRIDE showPage — inicializa chart en dashboard
+   showPage extendido — inicializa chart en dashboard
    ──────────────────────────────────────────────── */
-const _origShowPage = showPage;
-window.showPage = function(name) {
-  _origShowPage(name);
+const _showPageBase = showPage;
+window.showPage = function showPageExtended(name) {
+  _showPageBase(name);
   if (name === 'dashboard') setTimeout(() => renderRandomChart(), 100);
 };
 
@@ -1709,20 +1626,43 @@ document.addEventListener('DOMContentLoaded', () => {
    ──────────────────────────────────────────────── */
 
 /* Estado del último análisis — persiste entre navegaciones */
-let lastAnalysis = null; // { name, prices, timestamp }
+/* lastAnalysis declarado en el bloque STATE al inicio del archivo */
 
-/* Al cargar una imagen → reset visual, quédate en búsqueda visual */
-const _origProcessImage = processImage;
-window.processImage = function(file) {
-  _origProcessImage(file);
+/* Al cargar una imagen → reset visual + limpiar estado de análisis previo */
+function processImage(file) {
+  const r = new FileReader();
+  r.onload = ev => {
+    const img = document.getElementById('preview-img');
+    if (img) {
+      img.src = ev.target.result;
+      img.alt = 'Producto cargado para análisis: ' + file.name;
+    }
+    const uploadState  = document.getElementById('upload-state');
+    const previewState = document.getElementById('preview-state');
+    if (uploadState)  uploadState.style.display  = 'none';
+    if (previewState) {
+      previewState.style.display   = 'block';
+      previewState.style.opacity   = '0';
+      previewState.style.transform = 'translateY(16px)';
+      requestAnimationFrame(() => {
+        previewState.style.transition = 'all .4s ease';
+        previewState.style.opacity    = '1';
+        previewState.style.transform  = 'translateY(0)';
+      });
+    }
+  };
+  r.readAsDataURL(file);
+  // Reset UI de análisis — sin depender de closure stale
   setTimeout(() => {
     _hideAttrsAll();
-    document.getElementById('attrs-placeholder').style.display = 'block';
+    const ph = document.getElementById('attrs-placeholder');
+    if (ph) ph.style.display = 'block';
     document.getElementById('analysis-progress')?.classList.remove('visible');
     const btn = document.getElementById('btn-analyze');
     if (btn) { btn.classList.remove('loading'); btn.disabled = false; }
   }, 50);
-};
+}
+window.processImage = processImage;
 
 function _hideAttrsAll() {
   ['attrs-skeleton','attrs-card','attrs-placeholder'].forEach(id => {
@@ -1737,6 +1677,9 @@ window.analyzePrice = async function() {
     showToast('Sin imagen', 'Primero carga una imagen para analizar', true);
     return;
   }
+
+  // Limpiar resultados anteriores antes de iniciar — evita mostrar datos stale
+  _clearSearchState();
 
   const btn      = document.getElementById('btn-analyze');
   const progress = document.getElementById('analysis-progress');
@@ -1907,16 +1850,26 @@ function _setProgressStep(stepId, state) {
 /* ────────────────────────────────────────────────
    RESET UPLOAD — también limpia attrs
    ──────────────────────────────────────────────── */
-const _origResetUpload = resetUpload;
-window.resetUpload = function() {
-  _origResetUpload();
+function resetUpload() {
+  _clearSearchState();
+  currentFile = null;
+  const uploadState  = document.getElementById('upload-state');
+  const previewState = document.getElementById('preview-state');
+  const fileInput    = document.getElementById('file-input');
+  if (uploadState)  uploadState.style.display  = 'block';
+  if (previewState) previewState.style.display = 'none';
+  if (fileInput)    fileInput.value = '';
+  _resetFilters();
   _hideAttrsAll();
-  document.getElementById('attrs-placeholder').style.display = 'block';
+  const ph = document.getElementById('attrs-placeholder');
+  if (ph) ph.style.display = 'block';
   document.getElementById('analysis-progress')?.classList.remove('visible');
   const btn = document.getElementById('btn-analyze');
   if (btn) { btn.classList.remove('loading'); btn.disabled = false; }
   document.getElementById('results-summary')?.style.setProperty('display','none');
-};
+  showToast('Imagen eliminada', 'Puedes cargar una nueva imagen para analizar');
+}
+window.resetUpload = resetUpload;
 
 /* ────────────────────────────────────────────────
    PANTALLA DE RESULTADOS — lógica mejorada
@@ -2096,24 +2049,26 @@ function _renderApiResults(prices) {
 }
 
 /* ────────────────────────────────────────────────
-   DASHBOARD con chart
+   DASHBOARD con chart — extender _loadDashboard directamente
+   (sin cadena de _orig* que crea closures stale)
    ──────────────────────────────────────────────── */
-const _origLoadDashboard = _loadDashboard;
-window._loadDashboard = async function() {
-  await _origLoadDashboard();
+const _baseDashboardLoader = _loadDashboard;
+async function _loadDashboardWithChart() {
+  await _baseDashboardLoader();
   renderRandomChart();
-};
+}
+// Registrar la versión extendida como la canónica en window
+window._loadDashboard = _loadDashboardWithChart;
 
-// Cuando el usuario vuelve al dashboard desde admin, refrescar historial global
-const _origShowScreen = showScreen;
-window.showScreen = function(id) {
-  _origShowScreen(id);
+// Cuando el usuario vuelve a la pantalla app (desde admin), refrescar historial real
+const _showScreenBase = showScreen;
+window.showScreen = function showScreenExtended(id) {
+  _showScreenBase(id);
   if (id === 'app') {
-    // Pequeño delay para que la animación de transición termine
     setTimeout(async () => {
       try {
         const hist = await ApiScan.getGlobalHistory(1, 10);
-        const done = hist?.filter(h => h.product && h.status === 'done') || [];
+        const done = (hist || []).filter(h => h.product && h.status === 'done');
         if (done.length) {
           _renderDashboardHistory(done.slice(0, 5));
           countTo('cnt-products', done.length, 800);
@@ -2252,12 +2207,10 @@ function _hideSearchOverlay(success = true) {
    En admin ya existe y funciona bien con showLoader + tabla de historial.
    Aquí interceptamos cuando currentUser NO es admin para usar la overlay.
    ──────────────────────────────────────────────────────────────────────── */
-const _origRunScraping = window.runScraping || runScraping;
-
 window.runScraping = async function() {
-  // Si el usuario es admin, usar el flujo original (tabla de historial admin)
+  // Admin: usa el flujo de admin (runScraping base definido más arriba)
   if (currentUser?.role === 'admin') {
-    return _origRunScraping();
+    return runScrapingAdmin();
   }
 
   // Modo analista: pantalla de carga animada → resultados
@@ -2265,6 +2218,8 @@ window.runScraping = async function() {
   if (!query || !query.trim()) return;
   const q = query.trim();
 
+  // Limpiar estado anterior — no mezclar con resultados viejos
+  _clearSearchState();
   _showSearchOverlay(q);
 
   try {
