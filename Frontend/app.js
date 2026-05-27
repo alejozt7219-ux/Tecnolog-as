@@ -1331,6 +1331,35 @@ async function toggleUser(el, name) {
   }
 }
 
+/* ── Re-scraping de productos predeterminados ─────── */
+async function rerunDemoScraping() {
+  showLoader('Re-scrapeando productos predeterminados…');
+  const DEMO_QUERIES = [
+    'Nike Air Max 90',
+    'Auriculares Sony WH-CH520',
+    'Mochila portatil impermeable',
+    'Samsung Galaxy Watch6',
+    'Cafetera Nespresso',
+  ];
+  // Lanzar uno por uno con pequeño delay entre cada uno para evitar
+  // que el backend rechace requests simultáneos
+  let ok = 0;
+  for (const q of DEMO_QUERIES) {
+    try {
+      const res = await ApiScan.searchByText(q);
+      if (res?.task_id) ok++;
+    } catch (_) { /* ignorar errores individuales y continuar */ }
+    await new Promise(r => setTimeout(r, 400));
+  }
+  hideLoader();
+  showToast('Re-scraping iniciado', ok + '/' + DEMO_QUERIES.length + ' productos encolados 🔄');
+  _addRecentActivity('Re-scraping de productos predeterminados', 'Admin', 's-yellow');
+  setTimeout(() => _loadAdminScraping(), 3000);
+  // Activar polling del dashboard para cuando terminen
+  if (_dashboardPollTimer) { clearTimeout(_dashboardPollTimer); _dashboardPollTimer = null; }
+  _startDashboardPolling(0);
+}
+
 /* ── Admin: scraping manual REAL ─────────────────── */
 async function resetDemoProducts() {
   if (!confirm('¿Eliminar el historial de scraping manual? Esta acción no se puede deshacer.')) return;
