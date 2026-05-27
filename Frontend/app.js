@@ -905,8 +905,6 @@ async function _loadAdminScraping() {
   try {
     // Usar el historial real de búsquedas (SearchHistory) — persistente en BD
     const history = await ApiAdmin.getScrapingHistory(1);
-    const resetBtn = document.getElementById('btn-reset-demo');
-    if (resetBtn) resetBtn.style.display = 'inline-flex';
     if (history?.length) _renderScrapingHistory(history);
     else {
       // Si no hay historial real, intentar logs como fallback

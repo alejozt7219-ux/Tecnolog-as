@@ -1,6 +1,6 @@
 """
-Alkosto Colombia — scraper Playwright robusto (2025).
-Fix principal: extraer URL del producto específico, no la URL de búsqueda.
+Alkosto Colombia — scraper Playwright (2025).
+Selectores basados en HTML real inspeccionado.
 """
 from app.scraper.base import BaseScraper, ScrapedPrice
 import logging, re, unicodedata
@@ -34,31 +34,16 @@ class AlkostoScraper(BaseScraper):
     store_name = "Alkosto"
     base_url   = "https://www.alkosto.com"
 
-    TITLE_SELECTORS = [
-        "h3.product__item__top__title",
-        ".product__item__top__title",
-        "[class*='product__item'] h3",
-        "[class*='product-name']",
-        "h3",
-    ]
-    PRICE_SELECTORS = [
-        "span.price.price--redesign",
-        "span.price",
-        "[class*='price--redesign']",
-        "[class*='price']",
-    ]
-    ITEM_SELECTORS = [
-        "li.ais-InfiniteHits-item",
-        "li[class*='ais-InfiniteHits']",
-        "[class*='product__item']",
-        "article[class*='product']",
-        "div[class*='product-card']",
-    ]
-    # Links de producto en Alkosto: solo selectores específicos, sin "a" genérico
-    LINK_SELECTORS = [
-        "a.product__item__top__link",
-        "a[href*='/p/']",          # URL de producto Alkosto: /p/XXXXXX
-    ]
+    # Selector real del item (inspeccionado)
+    ITEM_SELECTOR  = "li.ais-InfiniteHits-item"
+
+    # Selectores reales (inspeccionados):
+    # Título: h3.product__item__top__title
+    # Link:   a.product__item__top__link  href="/nombre-producto/p/ID?algEvent=..."
+    # Precio: span.price.price--redesign  texto="$284.900"
+    TITLE_SELECTOR = "h3.product__item__top__title"
+    LINK_SELECTOR  = "a.product__item__top__link"
+    PRICE_SELECTOR = "span.price.price--redesign"
 
     async def search(self, query: str) -> list[ScrapedPrice]:
         page = await self.new_page()
@@ -71,76 +56,52 @@ class AlkostoScraper(BaseScraper):
                 "Referer": self.base_url,
             })
             await page.goto(search_url, wait_until="domcontentloaded", timeout=self._timeout())
-            await page.wait_for_timeout(3000)
 
-            # Encontrar selector de items
-            item_sel = None
-            for sel in self.ITEM_SELECTORS:
-                try:
-                    count = await page.locator(sel).count()
-                    if count > 0:
-                        item_sel = sel
-                        break
-                except Exception:
-                    continue
-
-            if not item_sel:
-                logger.warning(f"[Alkosto] No se encontraron items para '{query}'")
+            # Alkosto carga resultados con Algolia JS — esperar más
+            try:
+                await page.wait_for_selector(self.ITEM_SELECTOR, timeout=12000)
+            except Exception:
+                logger.warning(f"[Alkosto] No cargaron items para '{query}'")
                 return results
 
-            items = await page.query_selector_all(item_sel)
-            logger.info(f"[Alkosto] {len(items)} items para '{query}' (selector: {item_sel})")
+            await page.wait_for_timeout(2000)  # extra por si acaso
+
+            items = await page.query_selector_all(self.ITEM_SELECTOR)
+            logger.info(f"[Alkosto] {len(items)} items para '{query}'")
 
             for item in items[:15]:
                 try:
-                    # --- TÍTULO ---
-                    title = None
-                    for sel in self.TITLE_SELECTORS:
-                        el = await item.query_selector(sel)
-                        if el:
-                            title = (await el.inner_text()).strip()
-                            if title:
-                                break
-
-                    # --- PRECIO ---
-                    price = None
-                    for sel in self.PRICE_SELECTORS:
-                        el = await item.query_selector(sel)
-                        if el:
-                            raw = (await el.inner_text()).strip()
-                            price = _parse_price(raw)
-                            if price:
-                                break
-
-                    if not title or not price:
+                    # Título
+                    title_el = await item.query_selector(self.TITLE_SELECTOR)
+                    if not title_el:
+                        continue
+                    title = (await title_el.inner_text()).strip()
+                    if not title:
                         continue
 
+                    # Relevancia
                     if not _is_relevant(title, query):
                         logger.debug(f"[Alkosto] Descartado: '{title}'")
                         continue
 
-                    # --- URL DEL PRODUCTO ESPECÍFICO ---
-                    url = ""
-                    for sel in self.LINK_SELECTORS:
-                        link_el = await item.query_selector(sel)
-                        if link_el:
-                            href = await link_el.get_attribute("href") or ""
-                            if href:
-                                # Limpiar parámetros de tracking
-                                if "?" in href:
-                                    href = href.split("?")[0]
-                                # Construir URL completa
-                                if href.startswith("/"):
-                                    url = f"{self.base_url}{href}"
-                                elif href.startswith("http"):
-                                    url = href
-                                # Aceptar solo URLs reales de producto (/p/)
-                                if "/p/" in url:
-                                    break
-
-                    if not url:
-                        logger.debug(f"[Alkosto] Sin URL de producto para '{title}', saltando")
+                    # Precio
+                    price_el = await item.query_selector(self.PRICE_SELECTOR)
+                    if not price_el:
                         continue
+                    price = _parse_price((await price_el.inner_text()).strip())
+                    if not price:
+                        continue
+
+                    # URL: a.product__item__top__link href="/nombre/p/ID?algEvent=..."
+                    link_el = await item.query_selector(self.LINK_SELECTOR)
+                    if not link_el:
+                        continue
+                    href = await link_el.get_attribute("href") or ""
+                    # Limpiar tracking params
+                    href = href.split("?")[0]
+                    if not href:
+                        continue
+                    url = f"{self.base_url}{href}" if href.startswith("/") else href
 
                     results.append(ScrapedPrice(
                         store_name=self.store_name,
@@ -163,7 +124,7 @@ class AlkostoScraper(BaseScraper):
         finally:
             await page.close()
 
-        logger.info(f"[Alkosto] {len(results)} resultados finales para '{query}'")
+        logger.info(f"[Alkosto] {len(results)} resultados para '{query}'")
         return results
 
     def _timeout(self):

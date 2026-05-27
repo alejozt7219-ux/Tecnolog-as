@@ -1,18 +1,9 @@
 """
 Falabella Colombia — scraper Playwright (2025).
-Falabella usa una SPA con React. Los selectores actuales (.pod-link, b.pod-subTitle)
-corresponden a la versión antigua. Los selectores reales son:
-  - Contenedor producto: li.jsx-... o div[data-pod]
-  - Título: b.pod-subTitle o span.pod-subTitle
-  - Precio: span[data-testid='price-label'] o ul.prices-0 li span
-
-Como Falabella bloquea agresivamente bots, usamos networkidle y
-esperamos a que cargue la SPA completamente.
+Selectores basados en HTML real inspeccionado.
 """
 from app.scraper.base import BaseScraper, ScrapedPrice
-import logging
-import re
-import unicodedata
+import logging, re, unicodedata
 
 logger = logging.getLogger(__name__)
 
@@ -29,9 +20,28 @@ def _is_relevant(title: str, query: str, min_words: int = 2) -> bool:
     return matches >= min(min_words, len(q_words))
 
 
+def _parse_price(raw: str) -> float | None:
+    only_digits = re.sub(r"[^\d]", "", raw)
+    if not only_digits:
+        return None
+    price = float(only_digits[:9])
+    return price if 5_000 <= price <= 80_000_000 else None
+
+
 class FalabellaScraper(BaseScraper):
     store_name = "Falabella"
     base_url   = "https://www.falabella.com.co"
+
+    # Selector real del item (inspeccionado):
+    # El item ES un <a data-pod="catalyst-pod"> directamente
+    ITEM_SELECTOR = "a[data-pod='catalyst-pod']"
+
+    # Selectores reales (inspeccionados):
+    # Título:  b.pod-subTitle  (texto: "Cafetera de Cápsulas Inissia Negra con Espumador de Leche")
+    # Precio:  li.prices-0 span  (texto: "$  554.900  ")
+    # URL:     el href del item mismo → "https://www.falabella.com.co/falabella-co/product/73297271/..."
+    TITLE_SELECTOR = "b.pod-subTitle"
+    PRICE_SELECTOR = "li.prices-0 span"
 
     async def search(self, query: str) -> list[ScrapedPrice]:
         page = await self.new_page()
@@ -44,102 +54,59 @@ class FalabellaScraper(BaseScraper):
                 "Accept-Language": "es-CO,es;q=0.9",
                 "Referer": self.base_url,
             })
-
             await page.goto(search_url, wait_until="domcontentloaded", timeout=self._timeout())
 
-            # Falabella es SPA — esperar que carguen los pods de producto
-            # Probar múltiples selectores según versión del sitio
-            pod_selector = None
-            for selector in [
-                "a.pod-link",           # versión antigua (aún puede aparecer)
-                "[data-pod]",           # versión nueva
-                "li.gridItem",          # otra variante
-                "div.jsx-search-result-item",
-            ]:
-                try:
-                    await page.wait_for_selector(selector, timeout=10000)
-                    pod_selector = selector
-                    logger.debug(f"[Falabella] Usando selector de pod: {selector}")
-                    break
-                except Exception:
-                    continue
-
-            if not pod_selector:
-                logger.warning(f"[Falabella] No se encontraron pods de producto para '{query}'")
+            # Falabella SPA — esperar que carguen los pods
+            try:
+                await page.wait_for_selector(self.ITEM_SELECTOR, timeout=15000)
+            except Exception:
+                logger.warning(f"[Falabella] No cargaron pods para '{query}'")
                 return results
 
-            items = await page.query_selector_all(pod_selector)
+            items = await page.query_selector_all(self.ITEM_SELECTOR)
+            logger.info(f"[Falabella] {len(items)} items para '{query}'")
 
             for item in items[:12]:
                 try:
-                    # Título — múltiples selectores posibles
-                    title_el = (
-                        await item.query_selector("b.pod-subTitle") or
-                        await item.query_selector("span.pod-subTitle") or
-                        await item.query_selector("[data-testid='pod-subTitle']") or
-                        await item.query_selector("b.title") or
-                        await item.query_selector(".pod-title")
-                    )
-
-                    # Precio — múltiples selectores posibles
-                    price_el = (
-                        await item.query_selector("li.prices-0 span") or
-                        await item.query_selector("span[data-testid='price-label']") or
-                        await item.query_selector("li.prices-0") or
-                        await item.query_selector(".pod-price span") or
-                        await item.query_selector("[class*='price'] span")
-                    )
-
-                    if not title_el or not price_el:
+                    # URL: el item mismo es el <a>
+                    href = await item.get_attribute("href") or ""
+                    if not href:
                         continue
-
-                    title     = (await title_el.inner_text()).strip()
-                    price_raw = (await price_el.inner_text()).strip()
-
-                    # Limpiar precio: "$1.299.990" → 1299990
-                    price_str = (
-                        price_raw
-                        .replace("$", "")
-                        .replace(".", "")
-                        .replace(",", "")
-                        .strip()
-                        .split()[0]  # tomar solo el primer token
-                    )
-
-                    if not price_str.isdigit():
+                    # Limpiar tracking (sponsoredClickData=...)
+                    url = href.split("?")[0]
+                    if not url:
                         continue
+                    if url.startswith("/"):
+                        url = f"{self.base_url}{url}"
 
-                    price = float(price_str)
-                    if price <= 0 or price > 100_000_000:
+                    # Título
+                    title_el = await item.query_selector(self.TITLE_SELECTOR)
+                    if not title_el:
+                        continue
+                    title = (await title_el.inner_text()).strip()
+                    if not title:
                         continue
 
                     if not _is_relevant(title, query):
-                        logger.debug(f"[Falabella] Descartado: '{title}' para '{query}'")
+                        logger.debug(f"[Falabella] Descartado: '{title}'")
                         continue
 
-                    # URL del producto
-                    href = ""
-                    # Si el item mismo es un <a>
-                    tag = await item.evaluate("el => el.tagName")
-                    if tag.lower() == "a":
-                        href = await item.get_attribute("href") or ""
-                    else:
-                        link_el = await item.query_selector("a.pod-link, a[href]")
-                        if link_el:
-                            href = await link_el.get_attribute("href") or ""
+                    # Precio
+                    price_el = await item.query_selector(self.PRICE_SELECTOR)
+                    if not price_el:
+                        continue
+                    price = _parse_price((await price_el.inner_text()).strip())
+                    if not price:
+                        continue
 
-                    url = f"{self.base_url}{href}" if href.startswith("/") else href
-
-                    results.append(
-                        ScrapedPrice(
-                            store_name=self.store_name,
-                            price=price,
-                            currency="COP",
-                            url=url,
-                            title=title,
-                            in_stock=True,
-                        )
-                    )
+                    results.append(ScrapedPrice(
+                        store_name=self.store_name,
+                        price=price,
+                        currency="COP",
+                        url=url,
+                        title=title,
+                        in_stock=True,
+                    ))
 
                     if len(results) >= 3:
                         break
@@ -153,6 +120,7 @@ class FalabellaScraper(BaseScraper):
         finally:
             await page.close()
 
+        logger.info(f"[Falabella] {len(results)} resultados para '{query}'")
         return results
 
     def _timeout(self):

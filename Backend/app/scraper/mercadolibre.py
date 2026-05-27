@@ -1,6 +1,6 @@
 """
-MercadoLibre Colombia — scraper Playwright robusto (2025).
-Fix principal: extraer URL del producto específico, no la URL de búsqueda.
+MercadoLibre Colombia — scraper Playwright (2025).
+Selectores basados en HTML real inspeccionado.
 """
 from app.scraper.base import BaseScraper, ScrapedPrice
 import logging, re
@@ -9,11 +9,14 @@ logger = logging.getLogger(__name__)
 
 
 def _clean_meli_url(url: str) -> str:
+    """Limpia tracking de la URL. MeLi usa # para tracking, no ?"""
     if not url:
         return url
+    # Primero limpiar fragment (#polycard_client=... etc)
     if "#" in url:
         url = url.split("#")[0]
-    if "mclics" in url or "click1.mercadolibre" in url:
+    # Luego query params si los hubiera
+    if "?" in url:
         url = url.split("?")[0]
     return url[:2000]
 
@@ -30,39 +33,13 @@ class MercadoLibreScraper(BaseScraper):
     store_name = "Mercado Libre"
     base_url   = "https://listado.mercadolibre.com.co"
 
-    ITEM_SELECTORS = [
-        "li.ui-search-layout__item",
-        "li[class*='ui-search-layout__item']",
-        "[class*='ui-search-layout__item']",
-        "div[class*='poly-card']",
-        "li[class*='results-item']",
-    ]
-    TITLE_SELECTORS = [
-        "a.poly-component__title",
-        ".poly-component__title",
-        "h2.ui-search-item__title",
-        "[class*='ui-search-item__title']",
-        "h2[class*='title']",
-        "h3",
-    ]
-    PRICE_SELECTORS = [
-        ".poly-price__current .andes-money-amount__fraction",
-        ".ui-search-price__second-line .andes-money-amount__fraction",
-        ".andes-money-amount__fraction",
-        ".price-tag-fraction",
-        "[class*='amount__fraction']",
-    ]
-    # Selectores de link del PRODUCTO (no de búsqueda)
-    # MeLi siempre tiene un <a> con href que contiene el ID del producto (MCO-XXXXX)
-    LINK_SELECTORS = [
-        "a.poly-component__title",          # el título mismo es el link
-        "a[href*='mercadolibre.com.co/']",  # cualquier link a MeLi CO
-        "a[href*='-MCO-']",                  # link con ID de producto
-        "a[href*='/p/MCO']",                 # link de producto agregado
-        "a.ui-search-item__group__element",
-        "a[class*='result-image__link']",
-        "a",                                 # último recurso: primer <a>
-    ]
+    # Selector real del item (inspeccionado)
+    ITEM_SELECTOR = "li.ui-search-layout__item"
+
+    # Selector real del título/link (inspeccionado): a.poly-component__title dentro de h3
+    # href = "https://www.mercadolibre.com.co/...p/MCO15262368#..."
+    TITLE_SELECTOR  = "h3.poly-component__title-wrapper a.poly-component__title"
+    PRICE_SELECTOR  = ".poly-price__current .andes-money-amount__fraction"
 
     async def new_page(self):
         context = await self.browser.new_context(
@@ -102,85 +79,42 @@ class MercadoLibreScraper(BaseScraper):
         page = await self.new_page()
         results = []
 
-        # Construir URLs de búsqueda
-        search_url_main = f"https://www.mercadolibre.com.co/jm/search?as_word={query.replace(' ', '+')}"
-        search_url_list = f"{self.base_url}/{query.lower().replace(' ', '-')}"
+        search_url = f"https://www.mercadolibre.com.co/jm/search?as_word={query.replace(' ', '+')}"
 
         try:
-            await page.goto(search_url_main, wait_until="domcontentloaded", timeout=self._timeout())
+            await page.goto(search_url, wait_until="domcontentloaded", timeout=self._timeout())
             await page.wait_for_timeout(3000)
 
-            # Encontrar selector de items
-            item_sel = None
-            for sel in self.ITEM_SELECTORS:
-                try:
-                    count = await page.locator(sel).count()
-                    if count > 0:
-                        item_sel = sel
-                        break
-                except Exception:
-                    continue
-
-            if not item_sel:
-                # Fallback a URL de listado
-                await page.goto(search_url_list, wait_until="domcontentloaded", timeout=self._timeout())
-                await page.wait_for_timeout(3000)
-                for sel in self.ITEM_SELECTORS:
-                    try:
-                        count = await page.locator(sel).count()
-                        if count > 0:
-                            item_sel = sel
-                            break
-                    except Exception:
-                        continue
-
-            if not item_sel:
-                logger.warning(f"[MeLi CO] No se encontraron items para '{query}'")
+            # Esperar que carguen los items
+            try:
+                await page.wait_for_selector(self.ITEM_SELECTOR, timeout=10000)
+            except Exception:
+                logger.warning(f"[MeLi CO] No cargaron items para '{query}'")
                 return results
 
-            items = await page.query_selector_all(item_sel)
-            logger.info(f"[MeLi CO] {len(items)} items para '{query}' (selector: {item_sel})")
+            items = await page.query_selector_all(self.ITEM_SELECTOR)
+            logger.info(f"[MeLi CO] {len(items)} items para '{query}'")
 
             for item in items[:10]:
                 try:
-                    # --- TÍTULO ---
-                    title = None
-                    title_el = None
-                    for sel in self.TITLE_SELECTORS:
-                        title_el = await item.query_selector(sel)
-                        if title_el:
-                            title = (await title_el.inner_text()).strip()
-                            if title:
-                                break
-
-                    # --- PRECIO ---
-                    price = None
-                    for sel in self.PRICE_SELECTORS:
-                        el = await item.query_selector(sel)
-                        if el:
-                            raw = (await el.inner_text()).strip()
-                            price = _parse_price(raw)
-                            if price:
-                                break
-
-                    if not title or not price:
+                    # Título y URL vienen del mismo <a>
+                    title_el = await item.query_selector(self.TITLE_SELECTOR)
+                    if not title_el:
                         continue
 
-                    # --- URL DEL PRODUCTO ESPECÍFICO ---
-                    # Prioridad: título que sea link → links con MCO en URL → primer link
-                    url = ""
-                    for sel in self.LINK_SELECTORS:
-                        link_el = await item.query_selector(sel)
-                        if link_el:
-                            href = await link_el.get_attribute("href") or ""
-                            href = _clean_meli_url(href)
-                            # Aceptar SOLO URLs con ID de producto MeLi Colombia
-                            if href and ("-MCO-" in href or "/p/MCO" in href):
-                                url = href
-                                break
+                    title = (await title_el.inner_text()).strip()
+                    href  = await title_el.get_attribute("href") or ""
+                    url   = _clean_meli_url(href)
 
-                    if not url:
-                        logger.debug(f"[MeLi CO] Sin URL de producto para '{title}', saltando")
+                    if not title or not url:
+                        continue
+
+                    # Precio
+                    price_el = await item.query_selector(self.PRICE_SELECTOR)
+                    if not price_el:
+                        continue
+                    price = _parse_price((await price_el.inner_text()).strip())
+                    if not price:
                         continue
 
                     results.append(ScrapedPrice(

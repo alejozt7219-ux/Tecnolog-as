@@ -225,10 +225,8 @@ def run_startup_demo_scraping():
                 select(Product).where(Product.normalized_name == normalized)
             ).scalar_one_or_none()
 
-            # Si ya tiene precios guardados, no re-scrapear en startup
-            if product and product.prices:
-                logger.info(f"[Startup] '{product_query}' ya tiene precios, omitiendo.")
-                continue
+            # Siempre re-scrapear en startup para mantener precios y URLs actualizados
+            # (no omitir aunque ya tenga precios — pueden tener URLs incorrectas)
 
             task_id = str(uuid.uuid4())
             history = SearchHistory(

@@ -1,6 +1,6 @@
 """
-Éxito Colombia — scraper Playwright robusto (2025).
-Fix principal: extraer URL del producto específico, no la URL de búsqueda.
+Éxito Colombia — scraper Playwright (2025).
+Selectores basados en HTML real inspeccionado.
 """
 from app.scraper.base import BaseScraper, ScrapedPrice
 import logging, re, unicodedata
@@ -34,35 +34,18 @@ class ExitoScraper(BaseScraper):
     store_name = "Éxito"
     base_url = "https://www.exito.com"
 
-    ITEM_SELECTORS = [
-        "article[class*='productCard']",
-        "article[class*='ProductCard']",
-        "[class*='product-card']",
-        "article[class*='product']",
-        "div[class*='product-item']",
-    ]
-    TITLE_SELECTORS = [
-        "h3[class*='styles_name']",
-        "h3[class*='name']",
-        "[data-testid='product-name']",
-        "[class*='product-name']",
-        "h3",
-        "h2",
-    ]
-    PRICE_SELECTORS = [
-        "div[data-fs-container-price-otros-geral] p",
-        "[data-testid='product-price']",
-        "p[class*='ProductPrice_container__price']",
-        "[class*='ProductPrice']",
-        "[class*='product-price']",
-        "p[class*='price']",
-        "span[class*='Price']",
-    ]
-    # Links de producto en Éxito: solo selectores específicos, sin "a" genérico
-    LINK_SELECTORS = [
-        "a[data-testid='product-link']",
-        "a[href*='/p']",            # URL de producto Éxito termina en /p
-    ]
+    # Selector real del item (inspeccionado):
+    # <article class="productCard_productCard__M0677 ...">
+    # La clase tiene hash que cambia — usar selector estable
+    ITEM_SELECTOR = "article[class*='productCard_productCard']"
+
+    # Selectores reales (inspeccionados):
+    # Link:   a[data-testid='product-link']  href="/essenza-mini.../p"
+    # Título: h3[class*='styles_name']
+    # Precio: p[data-fs-container-price-otros='true']  texto="$ 401.900"
+    LINK_SELECTOR  = "a[data-testid='product-link']"
+    TITLE_SELECTOR = "h3[class*='styles_name']"
+    PRICE_SELECTOR = "p[data-fs-container-price-otros='true']"
 
     async def search(self, query: str) -> list[ScrapedPrice]:
         page = await self.new_page()
@@ -71,71 +54,48 @@ class ExitoScraper(BaseScraper):
 
         try:
             await page.goto(search_url, wait_until="domcontentloaded", timeout=self._timeout())
-            await page.wait_for_timeout(4000)  # Éxito es lento con React/Next.js
 
-            # Encontrar selector de items
-            item_sel = None
-            for sel in self.ITEM_SELECTORS:
-                try:
-                    count = await page.locator(sel).count()
-                    if count > 0:
-                        item_sel = sel
-                        break
-                except Exception:
-                    continue
-
-            if not item_sel:
-                logger.warning(f"[Éxito] No se encontraron items para '{query}'")
+            # Éxito es Next.js — esperar items
+            try:
+                await page.wait_for_selector(self.ITEM_SELECTOR, timeout=12000)
+            except Exception:
+                logger.warning(f"[Éxito] No cargaron items para '{query}'")
                 return results
 
-            items = await page.query_selector_all(item_sel)
-            logger.info(f"[Éxito] {len(items)} items para '{query}' (selector: {item_sel})")
+            await page.wait_for_timeout(2000)
+
+            items = await page.query_selector_all(self.ITEM_SELECTOR)
+            logger.info(f"[Éxito] {len(items)} items para '{query}'")
 
             for item in items[:12]:
                 try:
-                    # --- TÍTULO ---
-                    title = None
-                    for sel in self.TITLE_SELECTORS:
-                        el = await item.query_selector(sel)
-                        if el:
-                            title = (await el.inner_text()).strip()
-                            if title:
-                                break
+                    # URL: a[data-testid='product-link'] href="/nombre/p"
+                    link_el = await item.query_selector(self.LINK_SELECTOR)
+                    if not link_el:
+                        continue
+                    href = await link_el.get_attribute("href") or ""
+                    if not href:
+                        continue
+                    url = f"{self.base_url}{href}" if href.startswith("/") else href
 
-                    # --- PRECIO ---
-                    price = None
-                    for sel in self.PRICE_SELECTORS:
-                        el = await item.query_selector(sel)
-                        if el:
-                            raw = (await el.inner_text()).strip()
-                            price = _parse_price(raw)
-                            if price:
-                                break
-
-                    if not title or not price:
+                    # Título
+                    title_el = await item.query_selector(self.TITLE_SELECTOR)
+                    if not title_el:
+                        continue
+                    title = (await title_el.inner_text()).strip()
+                    if not title:
                         continue
 
                     if not _is_relevant(title, query):
                         logger.debug(f"[Éxito] Descartado: '{title}'")
                         continue
 
-                    # --- URL DEL PRODUCTO ESPECÍFICO ---
-                    url = ""
-                    for sel in self.LINK_SELECTORS:
-                        link_el = await item.query_selector(sel)
-                        if link_el:
-                            href = await link_el.get_attribute("href") or ""
-                            if href:
-                                if href.startswith("/"):
-                                    url = f"{self.base_url}{href}"
-                                elif href.startswith("http"):
-                                    url = href
-                                # Éxito: solo URLs reales de producto (/p, no búsqueda /s?)
-                                if url and "/p" in url and "/s?" not in url:
-                                    break
-
-                    if not url:
-                        logger.debug(f"[Éxito] Sin URL de producto para '{title}', saltando")
+                    # Precio: p[data-fs-container-price-otros='true'] → "$ 401.900"
+                    price_el = await item.query_selector(self.PRICE_SELECTOR)
+                    if not price_el:
+                        continue
+                    price = _parse_price((await price_el.inner_text()).strip())
+                    if not price:
                         continue
 
                     results.append(ScrapedPrice(
