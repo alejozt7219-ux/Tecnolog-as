@@ -930,15 +930,16 @@ function _renderScrapingHistory(items) {
     const st = item.status === 'done' ? 'Completado' : item.status === 'error' ? 'Error' : 'En proceso';
     const dateStr = new Date(item.created_at).toLocaleString('es-CO');
     const source = item.triggered_by_admin ? 'Admin' : 'Usuario';
-    const q = (item.query||'').replace(/'/g, "\\'");
     tr.innerHTML = `
       <td><time>${dateStr}</time></td>
       <td><span class="status-badge ${sc}">${st}</span></td>
       <td style="color:var(--muted);max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${item.query || '—'}</td>
       <td>—</td>
       <td style="color:var(--muted);font-size:11px">${source}</td>
-      <td><button class="link-btn" onclick="showToast('Búsqueda','${q}')">Ver</button></td>
+      <td><button class="link-btn" onclick="openScrapingResultModal(this)">Ver</button></td>
     `;
+    // Guardar datos del item en el botón para recuperarlos en el modal
+    tr.querySelector('.link-btn').dataset.item = JSON.stringify(item);
     tbody.appendChild(tr);
   }
 
@@ -2201,17 +2202,14 @@ function _hideSearchOverlay(success = true) {
   }, 700);
 }
 
-/* ── Override runScraping para modo USUARIO (analista) ──────────────────
-   En admin ya existe y funciona bien con showLoader + tabla de historial.
-   Aquí interceptamos cuando currentUser NO es admin para usar la overlay.
+/* ── runScraping para modo USUARIO (analista Y admin) ────────────────────
+   Todos los usuarios (incluyendo admins) que ejecuten scraping manual
+   desde cualquier pantalla del modo usuario (#app) ven la overlay animada
+   con mensajes por tienda y barra de progreso.
+   El admin en su panel propio sigue usando runScrapingAdmin() directamente.
    ──────────────────────────────────────────────────────────────────────── */
 window.runScraping = async function() {
-  // Admin: usa el flujo de admin (runScraping base definido más arriba)
-  if (currentUser?.role === 'admin') {
-    return runScrapingAdmin();
-  }
-
-  // Modo analista: pantalla de carga animada → resultados
+  // Pantalla de carga animada → resultados (para todos los roles)
   const query = prompt('¿Qué producto quieres buscar?', '');
   if (!query || !query.trim()) return;
   const q = query.trim();
@@ -2263,13 +2261,17 @@ window.runScraping = async function() {
       }, 500);
     }, 900);
 
-    // Actualizar dashboard en background
+    // Actualizar dashboard y panel admin en background
     setTimeout(async () => {
       try {
         const hist = await ApiScan.getGlobalHistory(1, 10);
         const done = hist?.filter(h => h.product && h.status === 'done') || [];
         if (done.length) _renderDashboardHistory(done.slice(0, 5));
       } catch (_) {}
+      // Si es admin, refrescar también la tabla de historial del panel admin
+      if (currentUser?.role === 'admin') {
+        try { await _loadAdminScraping(); } catch (_) {}
+      }
     }, 1800);
 
   } catch (err) {
@@ -2278,4 +2280,63 @@ window.runScraping = async function() {
       showToast('Error en búsqueda', err.message || 'No se encontraron resultados', true);
     }, 600);
   }
+};
+
+/* ═══════════════════════════════════════════════════════
+   MODAL — RESULTADOS DE EJECUCIÓN DE SCRAPING
+   Abre un modal flotante con los detalles del item del
+   historial: query, estado, fecha, fuente y precios.
+   ═══════════════════════════════════════════════════════ */
+window.openScrapingResultModal = function(btn) {
+  let item;
+  try { item = JSON.parse(btn.dataset.item); } catch (_) { return; }
+
+  // Rellenar encabezado
+  const modalQuery  = document.getElementById('srm-query');
+  const modalStatus = document.getElementById('srm-status');
+  const modalDate   = document.getElementById('srm-date');
+  const modalSource = document.getElementById('srm-source');
+  const modalPrices = document.getElementById('srm-prices');
+
+  if (modalQuery)  modalQuery.textContent  = item.query || '—';
+  if (modalSource) modalSource.textContent = item.triggered_by_admin ? 'Admin' : 'Usuario';
+  if (modalDate)   modalDate.textContent   = new Date(item.created_at).toLocaleString('es-CO');
+
+  const sc = item.status === 'done' ? 's-green' : item.status === 'error' ? 's-red' : 's-yellow';
+  const st = item.status === 'done' ? 'Completado' : item.status === 'error' ? 'Error' : 'En proceso';
+  if (modalStatus) modalStatus.innerHTML = `<span class="status-badge ${sc}">${st}</span>`;
+
+  // Precios del producto
+  if (modalPrices) {
+    const prices = item.product?.prices || [];
+    if (!prices.length) {
+      modalPrices.innerHTML = '<p style="color:var(--muted);text-align:center;padding:20px 0">Sin resultados de precios para esta búsqueda.</p>';
+    } else {
+      // Ordenar de menor a mayor
+      const sorted = [...prices].sort((a, b) => (a.price || 0) - (b.price || 0));
+      const minPrice = sorted[0]?.price || 0;
+      modalPrices.innerHTML = sorted.map((p, i) => {
+        const isBest = i === 0;
+        const fmt = (v) => v >= 1000000
+          ? `$${(v/1000000).toFixed(1)}M`
+          : v >= 1000
+            ? `$${Math.round(v/1000).toLocaleString('es-CO')}k`
+            : `$${(v||0).toLocaleString('es-CO')}`;
+        const diff = p.price && minPrice && p.price > minPrice
+          ? `<span style="color:var(--red);font-size:11px">+${fmt(p.price - minPrice)}</span>`
+          : '';
+        return `
+          <div class="srm-price-row ${isBest ? 'srm-price-best' : ''}">
+            <div class="srm-store-name">
+              ${isBest ? '<span class="srm-best-tag">Mejor precio</span>' : ''}
+              ${p.store?.name || p.store || 'Tienda'}
+            </div>
+            <div class="srm-price-val">${fmt(p.price)} ${diff}</div>
+            ${p.url ? `<a class="srm-link" href="${p.url}" target="_blank" rel="noopener">Ver →</a>` : ''}
+          </div>`;
+      }).join('');
+    }
+  }
+
+  openModal('modal-scraping-result');
 };
