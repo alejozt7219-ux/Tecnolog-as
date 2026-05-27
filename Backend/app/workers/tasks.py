@@ -10,7 +10,6 @@ from app.scraper.alkosto import AlkostoScraper
 
 logger = logging.getLogger(__name__)
 
-# Scrapers disponibles con su nombre de tienda para matchear con la BD
 SCRAPER_MAP = {
     "Amazon":        AmazonScraper,
     "Mercado Libre": MercadoLibreScraper,
@@ -19,7 +18,7 @@ SCRAPER_MAP = {
     "Alkosto":       AlkostoScraper,
 }
 
-# Productos de demo para scraping manual desde el panel admin
+# Productos predeterminados — se cargan automáticamente al iniciar
 DEMO_PRODUCTS = [
     "Nike Air Max",
     "Auriculares Sony WH-CH520",
@@ -49,7 +48,6 @@ def _get_active_scrapers(db):
         select(Store.name).where(Store.is_active == True)
     ).scalars().all()
 
-    # Normalizar nombres para comparar (ignorar mayúsculas/tildes)
     import unicodedata as _ud
     def _norm(s):
         return _ud.normalize("NFKD", s).encode("ascii", "ignore").decode().lower().strip()
@@ -61,7 +59,6 @@ def _get_active_scrapers(db):
         if _norm(store_name) in active_lower:
             selected.append(ScraperClass)
 
-    # Si no hay ninguna tienda en la BD todavía, usar todas (modo inicial)
     return selected if selected else list(SCRAPER_MAP.values())
 
 
@@ -78,7 +75,6 @@ def scrape_product(self, task_id: str, query: str, search_history_id):
     engine = create_engine(sync_url)
 
     with Session(engine) as db:
-        # Obtener solo scrapers de tiendas activas
         active_scrapers = _get_active_scrapers(db)
 
         async def _scrape():
@@ -121,13 +117,10 @@ def scrape_product(self, task_id: str, query: str, search_history_id):
             db.add(product)
             db.flush()
         else:
-            # Limpiar precios anteriores para evitar acumulación
             from sqlalchemy import delete
             db.execute(delete(PriceResult).where(PriceResult.product_id == product.id))
             db.flush()
 
-        # Deduplicar: quedarse con el precio más bajo por tienda
-        # Normalizar nombre de tienda para agrupar variantes (e.g. 'Mercado Libre' == 'MercadoLibre')
         import re as _re
         def _norm_store(name):
             n = unicodedata.normalize('NFKD', name).lower()
@@ -193,12 +186,75 @@ def run_daily_scraping():
     engine.dispose()
 
 
+@celery_app.task(name="app.workers.tasks.run_startup_demo_scraping")
+def run_startup_demo_scraping():
+    """
+    Se ejecuta una vez al iniciar la app (via beat o señal de startup).
+    Hace scraping de los 5 productos predeterminados si aún no tienen precios.
+    NO se lanza desde el botón de scraping manual.
+    """
+    from sqlalchemy import create_engine, select
+    from sqlalchemy.orm import Session
+    from app.models.product import SearchHistory, TaskStatus, Product
+    from app.models.user import User, UserRole
+    from app.core.config import settings
+    import uuid
+    import unicodedata
+    import re
+
+    sync_url = settings.DATABASE_URL.replace("postgresql+asyncpg://", "postgresql+psycopg2://")
+    engine = create_engine(sync_url)
+
+    with Session(engine) as db:
+        admin = db.execute(
+            select(User).where(User.role == UserRole.admin, User.is_active == True)
+        ).scalar_one_or_none()
+
+        if not admin:
+            logger.warning("[Startup] No hay admin activo para asociar los demos.")
+            engine.dispose()
+            return
+
+        launched = []
+        for product_query in DEMO_PRODUCTS:
+            # Verificar si ya existe historial reciente para este producto
+            normalized = unicodedata.normalize("NFKD", product_query).lower()
+            normalized = re.sub(r"[^\w\s]", "", normalized).strip()
+
+            product = db.execute(
+                select(Product).where(Product.normalized_name == normalized)
+            ).scalar_one_or_none()
+
+            # Si ya tiene precios guardados, no re-scrapear en startup
+            if product and product.prices:
+                logger.info(f"[Startup] '{product_query}' ya tiene precios, omitiendo.")
+                continue
+
+            task_id = str(uuid.uuid4())
+            history = SearchHistory(
+                user_id=admin.id,
+                task_id=task_id,
+                query=product_query,
+                status=TaskStatus.pending,
+                triggered_by_admin=True,
+            )
+            db.add(history)
+            db.flush()
+            scrape_product.delay(task_id=task_id, query=product_query, search_history_id=history.id)
+            launched.append(product_query)
+
+        db.commit()
+
+    logger.info(f"[Startup] Demos lanzados: {launched}")
+    engine.dispose()
+    return {"launched": launched}
+
+
 @celery_app.task(name="app.workers.tasks.run_manual_scraping")
-def run_manual_scraping():
+def run_manual_scraping(query: str = None):
     """
     Scraping manual desde el panel admin.
-    Elige un producto aleatorio de DEMO_PRODUCTS, lo scrapea en tiendas activas
-    y lo guarda en el historial de un usuario admin para que aparezca en el dashboard.
+    Recibe un query específico del usuario. NO usa DEMO_PRODUCTS.
     """
     from sqlalchemy import create_engine, select
     from sqlalchemy.orm import Session
@@ -207,20 +263,22 @@ def run_manual_scraping():
     from app.core.config import settings
     import uuid
 
+    if not query or not query.strip():
+        logger.warning("[Manual] No se especificó producto a scrapear.")
+        return {"status": "error", "message": "Sin query"}
+
     sync_url = settings.DATABASE_URL.replace("postgresql+asyncpg://", "postgresql+psycopg2://")
     engine = create_engine(sync_url)
 
-    query = random.choice(DEMO_PRODUCTS)
     task_id = str(uuid.uuid4())
 
     with Session(engine) as db:
-        # Asociar al primer admin disponible para que aparezca en su historial
         admin = db.execute(
             select(User).where(User.role == UserRole.admin, User.is_active == True)
         ).scalar_one_or_none()
 
         if not admin:
-            logger.warning("[Manual] No hay admin activo para asociar el scraping.")
+            logger.warning("[Manual] No hay admin activo.")
             engine.dispose()
             return {"task_id": task_id, "query": query, "status": "no_admin"}
 
@@ -229,6 +287,7 @@ def run_manual_scraping():
             task_id=task_id,
             query=query,
             status=TaskStatus.pending,
+            triggered_by_admin=True,
         )
         db.add(history)
         db.commit()
@@ -237,7 +296,6 @@ def run_manual_scraping():
 
     engine.dispose()
 
-    # Lanzar el scraping real
     scrape_product.delay(task_id=task_id, query=query, search_history_id=history_id)
     logger.info(f"[Manual] Scraping lanzado para '{query}' (task_id={task_id})")
     return {"task_id": task_id, "query": query}

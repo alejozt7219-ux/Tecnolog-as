@@ -1007,22 +1007,48 @@ function _renderScrapingHistory(items) {
   const tbody = document.getElementById('scraping-history-tbody');
   if (!tbody) return;
   tbody.innerHTML = '';
-  items.forEach(item => {
+
+  const VISIBLE = 5;
+  const visible = items.slice(0, VISIBLE);
+  const hidden  = items.slice(VISIBLE, VISIBLE + 10);
+
+  function makeRow(item, hidden) {
     const tr = document.createElement('tr');
+    if (hidden) { tr.className = 'history-extra'; tr.style.display = 'none'; }
     const sc = item.status === 'done' ? 's-green' : item.status === 'error' ? 's-red' : 's-yellow';
     const st = item.status === 'done' ? 'Completado' : item.status === 'error' ? 'Error' : 'En proceso';
     const dateStr = new Date(item.created_at).toLocaleString('es-CO');
-    const source = item.triggered_by_admin ? 'Admin manual' : 'Usuario';
+    const source = item.triggered_by_admin ? 'Admin' : 'Usuario';
+    const q = (item.query||'').replace(/'/g, "\\'");
     tr.innerHTML = `
       <td><time>${dateStr}</time></td>
       <td><span class="status-badge ${sc}">${st}</span></td>
       <td style="color:var(--muted);max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${item.query || '—'}</td>
       <td>—</td>
       <td style="color:var(--muted);font-size:11px">${source}</td>
-      <td><button class="link-btn" onclick="showToast('Búsqueda','${(item.query||'').replace(/'/g,"\\'")}')">Ver</button></td>
+      <td><button class="link-btn" onclick="showToast('Búsqueda','${q}')">Ver</button></td>
     `;
     tbody.appendChild(tr);
-  });
+  }
+
+  visible.forEach(item => makeRow(item, false));
+  hidden.forEach(item  => makeRow(item, true));
+
+  const existing = document.getElementById('scraping-ver-mas-btn');
+  if (existing) existing.remove();
+  if (hidden.length > 0) {
+    const btnRow = document.createElement('tr');
+    btnRow.id = 'scraping-ver-mas-btn';
+    const count = hidden.length;
+    btnRow.innerHTML = '<td colspan="6" style="text-align:center;padding:10px 0"><button class="link-btn" id="btn-ver-mas-scraping" style="font-size:13px;padding:6px 18px;border:1px solid var(--border);border-radius:6px">Ver más (' + count + ')</button></td>';
+    tbody.appendChild(btnRow);
+    document.getElementById('btn-ver-mas-scraping').addEventListener('click', function() {
+      const extras = document.querySelectorAll('#scraping-history-tbody .history-extra');
+      const showing = extras[0] && extras[0].style.display !== 'none';
+      extras.forEach(r => r.style.display = showing ? 'none' : '');
+      this.textContent = showing ? 'Ver más (' + count + ')' : 'Ver menos';
+    });
+  }
 }
 
 function _renderScrapingLogs(logs) {
@@ -1117,8 +1143,9 @@ async function _loadAdminOverview() {
     const tbody = document.querySelector('#admin-page-overview .table-wrap tbody');
     if (tbody && logs?.length) {
       tbody.innerHTML = '';
-      logs.slice(0, 10).forEach(item => {
-        // Soporte tanto para ScrapingLog como SearchHistory
+      const overviewVisible = logs.slice(0, 5);
+      const overviewHidden  = logs.slice(5, 15);
+      const renderOverviewRow = (item, hidden) => {
         const isHistory = 'query' in item;
         const sc = (isHistory ? item.status === 'done' : item.status === 'success') ? 's-green'
                  : (item.status === 'error') ? 's-red' : 's-yellow';
@@ -1127,15 +1154,33 @@ async function _loadAdminOverview() {
           ? (item.triggered_by_admin ? `Scraping manual: ${item.query}` : `Búsqueda usuario: ${item.query}`)
           : `Scraping automático completado`;
         const dateStr = new Date(item.created_at).toLocaleString('es-CO');
-        tbody.insertAdjacentHTML('beforeend', `
-          <tr>
-            <td><div class="act-icon" aria-hidden="true"><svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg></div></td>
-            <td>${desc}</td>
-            <td style="color:var(--muted)">${isHistory ? (item.triggered_by_admin ? 'Admin' : 'Usuario') : 'Scraping'}</td>
-            <td style="color:var(--muted)"><time>${dateStr}</time></td>
-            <td><span class="status-badge ${sc}">${st}</span></td>
-          </tr>`);
-      });
+        const tr = document.createElement('tr');
+        if (hidden) { tr.className = 'overview-extra'; tr.style.display = 'none'; }
+        tr.innerHTML = `
+          <td><div class="act-icon" aria-hidden="true"><svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg></div></td>
+          <td>${desc}</td>
+          <td style="color:var(--muted)">${isHistory ? (item.triggered_by_admin ? 'Admin' : 'Usuario') : 'Scraping'}</td>
+          <td style="color:var(--muted)"><time>${dateStr}</time></td>
+          <td><span class="status-badge ${sc}">${st}</span></td>`;
+        tbody.appendChild(tr);
+      };
+      overviewVisible.forEach(item => renderOverviewRow(item, false));
+      overviewHidden.forEach(item  => renderOverviewRow(item, true));
+      const existingOvBtn = document.getElementById('overview-ver-mas-btn');
+      if (existingOvBtn) existingOvBtn.remove();
+      if (overviewHidden.length > 0) {
+        const count = overviewHidden.length;
+        const btnRow = document.createElement('tr');
+        btnRow.id = 'overview-ver-mas-btn';
+        btnRow.innerHTML = '<td colspan="5" style="text-align:center;padding:10px 0"><button class="link-btn" id="btn-ver-mas-overview" style="font-size:13px;padding:6px 18px;border:1px solid var(--border);border-radius:6px">Ver más (' + count + ')</button></td>';
+        tbody.appendChild(btnRow);
+        document.getElementById('btn-ver-mas-overview').addEventListener('click', function() {
+          const extras = document.querySelectorAll('#admin-page-overview .table-wrap tbody .overview-extra');
+          const showing = extras[0] && extras[0].style.display !== 'none';
+          extras.forEach(r => r.style.display = showing ? 'none' : '');
+          this.textContent = showing ? 'Ver más (' + count + ')' : 'Ver menos';
+        });
+      }
     }
   } catch (_) {
     countTo('acnt-products', 0, 600);
@@ -1272,16 +1317,17 @@ async function toggleUser(el, name) {
 
 /* ── Admin: scraping manual REAL ─────────────────── */
 async function resetDemoProducts() {
-  if (!confirm('¿Restablecer los productos predeterminados? Esto eliminará el historial de scrapings manuales.')) return;
-  showLoader('Restableciendo productos…');
+  if (!confirm('¿Eliminar el historial de scraping manual? Esta acción no se puede deshacer.')) return;
+  showLoader('Limpiando historial…');
   try {
     await ApiAdmin.resetDemoProducts();
     hideLoader();
-    showToast('Productos restablecidos', 'Los 5 productos predeterminados están listos');
+    showToast('Historial limpiado', 'El historial de scraping manual fue eliminado');
+    _addRecentActivity('Historial de scraping manual eliminado', 'Admin', 's-yellow');
     await _loadAdminScraping();
   } catch (err) {
     hideLoader();
-    showToast('Error', err.message || 'No se pudo restablecer', true);
+    showToast('Error', err.message || 'No se pudo limpiar el historial', true);
   }
 }
 

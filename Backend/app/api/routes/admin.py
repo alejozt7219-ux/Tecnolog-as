@@ -337,51 +337,18 @@ async def reset_demo_products(
     db: AsyncSession = Depends(get_db),
     admin: User = Depends(require_admin),
 ):
-    """Elimina el historial de scrapings manuales del admin y deja los productos demo listos."""
-    from app.models.product import SearchHistory, Product
-    import unicodedata, re
+    """Solo borra el historial de scrapings manuales del admin. NO lanza scraping."""
+    from app.models.product import SearchHistory
+    from sqlalchemy import delete as sa_delete
 
-    DEMO_PRODUCTS = [
-        "Nike Air Max",
-        "Auriculares Sony WH-CH520",
-        "Mochila portatil impermeable",
-        "Smartwatch Samsung Galaxy Watch",
-        "Cafetera Nespresso",
-    ]
-
-    # Eliminar historial manual del admin y productos demo anteriores
-    result = await db.execute(
-        select(SearchHistory).where(
+    await db.execute(
+        sa_delete(SearchHistory).where(
             SearchHistory.user_id == admin.id,
             SearchHistory.triggered_by_admin == True,
         )
     )
-    for h in result.scalars().all():
-        await db.delete(h)
-
     await db.commit()
-
-    # Lanzar scraping real de los 5 productos demo
-    from app.workers.tasks import scrape_product
-    import uuid as _uuid
-    from app.models.product import TaskStatus
-    launched = []
-    for product_query in DEMO_PRODUCTS:
-        task_id = str(_uuid.uuid4())
-        history = SearchHistory(
-            user_id=admin.id,
-            task_id=task_id,
-            query=product_query,
-            status=TaskStatus.pending,
-            triggered_by_admin=True,
-        )
-        db.add(history)
-        await db.flush()
-        scrape_product.delay(task_id=task_id, query=product_query, search_history_id=history.id)
-        launched.append(product_query)
-
-    await db.commit()
-    return {"message": "Scraping de productos demo iniciado", "demo_products": launched}
+    return {"message": "Historial de scraping manual eliminado correctamente"}
 
 
 @router.get("/scraping/logs", response_model=list[ScrapingLogOut])
