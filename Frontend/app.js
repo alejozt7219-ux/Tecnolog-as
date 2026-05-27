@@ -226,13 +226,15 @@ async function doLogin() {
     const isAdmin = currentUser.role === 'admin';
     if (isAdmin) {
       showScreen('admin');
-      showAdminPage('overview');  // esto ya llama _loadAdminOverview internamente
+      showAdminPage('overview');
       setTimeout(() => showToast('¡Acceso autorizado!', `Bienvenido, ${currentUser.name.split(' ')[0]}`), 400);
+      setTimeout(() => _addRecentActivity(`Admin ${currentUser.name} inició sesión`, 'Sesión', 's-green'), 800);
     } else {
       showScreen('app');
       showPage('dashboard');
-      _loadDashboard();  // sin await — no bloquear la navegación
+      _loadDashboard();
       setTimeout(() => showToast('¡Bienvenido!', `Hola ${currentUser.name.split(' ')[0]} 👋`), 400);
+      setTimeout(() => _addRecentActivity(`Usuario ${currentUser.name} inició sesión`, 'Sesión', 's-green'), 800);
     }
   } catch (err) {
     hideLoader();
@@ -303,11 +305,13 @@ async function doRegister() {
       showScreen('admin');
       showAdminPage('overview');
       setTimeout(() => showToast('¡Cuenta creada!', `Bienvenido, ${currentUser.name.split(' ')[0]} 👑`), 400);
+      setTimeout(() => _addRecentActivity(`Admin ${currentUser.name} se registró`, 'Registro', 's-green'), 800);
     } else {
       showScreen('app');
       showPage('dashboard');
       _loadDashboard();  // sin await
       setTimeout(() => showToast('¡Cuenta creada!', `Bienvenido a PriceVision, ${name.split(' ')[0]}`), 400);
+      setTimeout(() => _addRecentActivity(`Nuevo usuario registrado: ${currentUser.name}`, 'Registro', 's-green'), 800);
     }
   } catch (err) {
     hideLoader();
@@ -324,7 +328,9 @@ async function doRegister() {
 
 /* ── LOGOUT ──────────────────────────────────────── */
 function logout() {
-  const userName = currentUser?.name?.split(' ')[0] || null;
+  const userName = currentUser?.name || null;
+  const shortName = userName?.split(' ')[0] || null;
+  _addRecentActivity(`Usuario ${userName || 'desconocido'} cerró sesión`, 'Sesión', 's-yellow');
   ApiAuth.logout();
   currentUser = null;
   currentFile = null;
@@ -336,21 +342,23 @@ function logout() {
   resetUpload(true);
   showPage('dashboard');
   showScreen('landing');
-  if (userName) {
-    setTimeout(() => showToast('¡Hasta pronto! 👋', `Vuelve pronto, ${userName} 🚀`), 300);
+  if (shortName) {
+    setTimeout(() => showToast('¡Hasta pronto! 👋', `Vuelve pronto, ${shortName} 🚀`), 300);
   } else {
     setTimeout(() => showToast('¡Hasta pronto! 👋', 'Vuelve pronto 🚀'), 300);
   }
 }
 
 function adminLogout() {
-  const userName = currentUser?.name?.split(' ')[0] || null;
+  const userName = currentUser?.name || null;
+  const shortName = userName?.split(' ')[0] || null;
+  _addRecentActivity(`Admin ${userName || 'desconocido'} cerró sesión`, 'Sesión', 's-yellow');
   ApiAuth.logout();
   currentUser = null;
   wantsAdmin  = false;
   showScreen('landing');
-  if (userName) {
-    setTimeout(() => showToast('¡Hasta pronto! 👋', `Vuelve pronto, ${userName} 🚀`), 300);
+  if (shortName) {
+    setTimeout(() => showToast('¡Hasta pronto! 👋', `Vuelve pronto, ${shortName} 🚀`), 300);
   } else {
     setTimeout(() => showToast('¡Hasta pronto! 👋', 'Vuelve pronto 🚀'), 300);
   }
@@ -594,18 +602,24 @@ function _startDashboardPolling(attempt = 0) {
   _dashboardPollTimer = setTimeout(async () => {
     _dashboardPollTimer = null;
     try {
-      const history = await ApiScan.getGlobalHistory(1, 10);
       const completedStates = ['done', 'success', 'completed'];
-      const done = (history || []).filter(
+      const [userHistory, globalHistory] = await Promise.all([
+        ApiScan.getHistory(1, 100).catch(() => []),
+        ApiScan.getGlobalHistory(1, 10).catch(() => []),
+      ]);
+      const userDone = (userHistory || []).filter(
         h => h.product && completedStates.includes(String(h.status || '').toLowerCase())
       );
-      if (done.length > 0) {
-        // ¡Llegaron resultados reales! Actualizar dashboard.
-        _renderDashboardHistory(_mergeDashboardHistory(done));
-        countTo('cnt-products', done.length, 400);
-        localStorage.setItem('pv-dashboard-history', JSON.stringify(done));
+      const globalDone = (globalHistory || []).filter(
+        h => h.product && completedStates.includes(String(h.status || '').toLowerCase())
+      );
+      if (globalDone.length > 0) {
+        _renderDashboardHistory(_mergeDashboardHistory(globalDone));
+        countTo('cnt-products', userDone.length, 400);
+        const ops = userDone.filter(h => (h.product?.prices?.length || 0) > 1).length;
+        countTo('cnt-ops', ops, 400);
+        localStorage.setItem('pv-dashboard-history', JSON.stringify(globalDone));
       } else {
-        // Todavía pendiente — seguir haciendo polling
         _startDashboardPolling(attempt + 1);
       }
     } catch (_) {
@@ -618,37 +632,40 @@ async function _loadDashboard() {
   // Cancelar cualquier poll anterior al cargar el dashboard
   if (_dashboardPollTimer) { clearTimeout(_dashboardPollTimer); _dashboardPollTimer = null; }
   try {
-    // getGlobalHistory: propias del usuario + scrapings manuales del admin (visibles a todos)
-    const history = await ApiScan.getGlobalHistory(1, 30);
-    if (history?.length) {
-      // Filtrar solo las que tienen producto asociado (status done)
-      const completedStates = ['done', 'success', 'completed'];
-      const done = history.filter(
-        h => h.product && completedStates.includes(String(h.status || '').toLowerCase())
-      );
-      if (done.length) {
-        _renderDashboardHistory(_mergeDashboardHistory(done));
-        countTo('cnt-products', done.length, 800);
-      } else {
-        // Hay historial pero los scrapers aún no terminan — mostrar cache
-        // y arrancar polling continuo que actualizará cuando lleguen los datos reales
-        _renderDashboardFromCache();
-        countTo('cnt-products', Object.keys(CACHED_PRICES).length, 800);
-        _startDashboardPolling(0);
-      }
+    // getHistory: solo las búsquedas del usuario actual (imagen + manual)
+    // getGlobalHistory: todo (para la tabla del historial que incluye predeterminados del admin)
+    const [userHistory, globalHistory] = await Promise.all([
+      ApiScan.getHistory(1, 100).catch(() => []),
+      ApiScan.getGlobalHistory(1, 30).catch(() => []),
+    ]);
+
+    // cnt-products = búsquedas propias completadas del usuario
+    const completedStates = ['done', 'success', 'completed'];
+    const userDone = (userHistory || []).filter(
+      h => h.product && completedStates.includes(String(h.status || '').toLowerCase())
+    );
+    countTo('cnt-products', userDone.length, 800);
+
+    // Tabla del dashboard = historial global (propias + admin predeterminados)
+    const globalDone = (globalHistory || []).filter(
+      h => h.product && completedStates.includes(String(h.status || '').toLowerCase())
+    );
+    if (globalDone.length) {
+      _renderDashboardHistory(_mergeDashboardHistory(globalDone));
+    } else if (userDone.length) {
+      _renderDashboardHistory(_mergeDashboardHistory(userDone));
     } else {
-      // Sin historial real todavía — mostrar cache y arrancar polling
-      // (el startup scraping puede estar en cola y llegar en segundos)
       _renderDashboardFromCache();
-      countTo('cnt-products', Object.keys(CACHED_PRICES).length, 800);
       _startDashboardPolling(0);
     }
+
     countTo('cnt-stores', 5, 600);
-    countTo('cnt-ops', 0, 600);
+    // Oportunidades = búsquedas propias con más de 1 precio
+    const ops = userDone.filter(h => (h.product?.prices?.length || 0) > 1).length;
+    countTo('cnt-ops', ops, 600);
   } catch (err) {
-    // Error de red o 401 — siempre mostrar cache como fallback
     _renderDashboardFromCache();
-    countTo('cnt-products', Object.keys(CACHED_PRICES).length, 600);
+    countTo('cnt-products', 0, 600);
     countTo('cnt-stores', 5, 600);
     countTo('cnt-ops', 0, 600);
   }
@@ -1076,15 +1093,61 @@ function _renderUsersTable(users) {
 /* FIX: carga scraping logs reales */
 async function _loadAdminScraping() {
   try {
-    // Usar el historial real de búsquedas (SearchHistory) — persistente en BD
     const history = await ApiAdmin.getScrapingHistory(1);
-    if (history?.length) _renderScrapingHistory(history);
-    else {
-      // Si no hay historial real, intentar logs como fallback
+    if (history?.length) {
+      _renderScrapingHistory(history);
+      _updateScrapingStatCards(history);
+    } else {
       const logs = await ApiAdmin.getScrapingLogs(1).catch(() => []);
       if (logs?.length) _renderScrapingLogs(logs);
     }
   } catch (_) {}
+}
+
+/* Actualiza las tarjetas de stats de scraping (overview + sección scraping)
+   a partir del historial real — sin depender del campo data.scraping del overview */
+function _updateScrapingStatCards(history) {
+  if (!history?.length) return;
+
+  // La entrada más reciente (el historial ya viene ordenado desc desde el backend)
+  const latest = history[0];
+  const latestDate = new Date(latest.created_at);
+  const isDone = latest.status === 'done';
+  const isError = latest.status === 'error';
+  const sc = isDone ? 's-green' : isError ? 's-red' : 's-yellow';
+  const st = isDone ? 'Completado' : isError ? 'Error' : 'En proceso';
+
+  // ── Sección Scraping ──
+  const lastExecDate = document.getElementById('last-execution-date');
+  const lastExecStatus = document.getElementById('last-execution-status');
+  if (lastExecDate) lastExecDate.textContent = latestDate.toLocaleString('es-CO', { dateStyle: 'short', timeStyle: 'short' });
+  if (lastExecStatus) { lastExecStatus.textContent = st; lastExecStatus.className = `status-badge ${sc}`; }
+
+  // Productos hoy = entradas 'done' cuya fecha sea hoy
+  const todayStr = new Date().toLocaleDateString('es-CO');
+  const todayDone = history.filter(h => {
+    if (h.status !== 'done') return false;
+    return new Date(h.created_at).toLocaleDateString('es-CO') === todayStr;
+  });
+  const productsToday = todayDone.reduce((sum, h) => sum + (h.product?.prices?.length || 0), 0);
+  const scrapingProductsToday = document.getElementById('scraping-products-today');
+  if (scrapingProductsToday) scrapingProductsToday.textContent = productsToday || '—';
+
+  // ── Overview ──
+  const acntLastExec = document.getElementById('acnt-last-exec');
+  const acntLastStatus = document.getElementById('acnt-last-status');
+  if (acntLastExec) acntLastExec.textContent = latestDate.toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' });
+  if (acntLastStatus) { acntLastStatus.textContent = st; acntLastStatus.className = `status-badge ${sc}`; }
+
+  // Productos normalizados = total de precios en entradas done
+  const totalPrices = history.filter(h => h.status === 'done')
+    .reduce((sum, h) => sum + (h.product?.prices?.length || 0), 0);
+  const acntProducts = document.getElementById('acnt-products');
+  if (acntProducts && totalPrices > 0) acntProducts.textContent = totalPrices;
+
+  // ── Tiendas: Productos totales ──
+  const storeProductsTotal = document.getElementById('store-products-total');
+  if (storeProductsTotal) storeProductsTotal.textContent = totalPrices || '—';
 }
 
 function _renderScrapingHistory(items) {
@@ -1223,6 +1286,9 @@ async function _loadAdminOverview() {
     if (lastExec && data.scraping?.last_run) {
       lastExec.textContent = new Date(data.scraping.last_run).toLocaleDateString('es-CO');
     }
+
+    // Actualizar tarjetas de scraping con historial real (sobreescribe data.scraping si hay datos frescos)
+    if (logs?.length) _updateScrapingStatCards(logs);
 
     // Tabla de actividad reciente — persistente desde BD
     const tbody = document.querySelector('#admin-page-overview .table-wrap tbody');
@@ -1541,6 +1607,11 @@ async function _pollDashboardUpdate(taskId, attempts = 0) {
       const history = await ApiScan.getGlobalHistory(1, 10);
       const done = history?.filter(h => h.product && h.status === 'done') || [];
       if (done.length) _renderDashboardHistory(_mergeDashboardHistory(done));
+      // Refrescar tarjetas de stats con el historial actualizado
+      try {
+        const fullHistory = await ApiAdmin.getScrapingHistory(1);
+        if (fullHistory?.length) _updateScrapingStatCards(fullHistory);
+      } catch (_) {}
       showToast('¡Listo!', `Precios de "${result.product?.name || taskId}" actualizados 🎉`);
       return;
     }
@@ -2550,12 +2621,17 @@ window.runScraping = async function() {
       }, 500);
     }, 900);
 
-    // Actualizar dashboard y panel admin en background
+    // Actualizar dashboard y tarjetas de stats en background
     setTimeout(async () => {
       try {
         const hist = await ApiScan.getGlobalHistory(1, 10);
         const done = hist?.filter(h => h.product && h.status === 'done') || [];
         if (done.length) _renderDashboardHistory(_mergeDashboardHistory(done));
+      } catch (_) {}
+      // Refrescar tarjetas de scraping stats para todos los roles
+      try {
+        const fullHistory = await ApiAdmin.getScrapingHistory(1);
+        if (fullHistory?.length) _updateScrapingStatCards(fullHistory);
       } catch (_) {}
       // Si es admin, refrescar también la tabla de historial del panel admin
       if (currentUser?.role === 'admin') {

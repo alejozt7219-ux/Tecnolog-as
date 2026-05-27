@@ -1101,7 +1101,7 @@
       <ul class="stats-grid" style="grid-template-columns:repeat(3,1fr)" role="list" aria-label="Resumen de tiendas">
         <li class="stat-card" role="listitem"><div class="stat-label">Total de tiendas</div><div class="stat-val" id="store-count" aria-live="polite">5</div></li>
         <li class="stat-card" role="listitem"><div class="stat-label">Tiendas activas</div><div class="stat-val" style="color:var(--green)" id="store-active-count" aria-live="polite">4</div></li>
-        <li class="stat-card" role="listitem"><div class="stat-label">Productos totales</div><div class="stat-val">5789</div></li>
+        <li class="stat-card" role="listitem"><div class="stat-label">Productos totales</div><div class="stat-val" id="store-products-total">—</div></li>
       </ul>
 
       <div class="table-wrap" style="margin-top:8px" role="region" aria-label="Lista de tiendas configuradas">
@@ -1225,8 +1225,8 @@
 
       <ul class="stats-grid" role="list" aria-label="Estadísticas de scraping">
         <li class="stat-card" role="listitem"><div class="stat-label">Frecuencia programada</div><div class="stat-val" style="font-size:22px">Diaria</div><span class="stat-tag tag-muted" style="font-size:10px">08:30 AM</span></li>
-        <li class="stat-card" role="listitem"><div class="stat-label">Última ejecución</div><div class="stat-val" style="font-size:20px" id="last-execution-date" aria-live="polite">25-02-2026</div><span class="status-badge s-green" style="margin-top:6px">Completado</span></li>
-        <li class="stat-card" role="listitem"><div class="stat-label">Productos hoy</div><div class="stat-val" style="color:var(--green)">5789</div><span class="stat-tag tag-muted">Extraídos exitosamente</span></li>
+        <li class="stat-card" role="listitem"><div class="stat-label">Última ejecución</div><div class="stat-val" style="font-size:20px" id="last-execution-date" aria-live="polite">—</div><span class="status-badge s-green" style="margin-top:6px" id="last-execution-status">—</span></li>
+        <li class="stat-card" role="listitem"><div class="stat-label">Productos hoy</div><div class="stat-val" style="color:var(--green)" id="scraping-products-today">—</div><span class="stat-tag tag-muted">Extraídos exitosamente</span></li>
         <li class="stat-card" role="listitem"><div class="stat-label">Duración promedio</div><div class="stat-val">3.4<span style="font-size:14px;color:var(--muted)"> m</span></div><span class="stat-tag tag-muted">Últimas 5 ejecuciones</span></li>
       </ul>
 
