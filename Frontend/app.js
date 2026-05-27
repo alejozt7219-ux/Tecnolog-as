@@ -324,6 +324,7 @@ async function doRegister() {
 
 /* ── LOGOUT ──────────────────────────────────────── */
 function logout() {
+  const userName = currentUser?.name?.split(' ')[0] || null;
   ApiAuth.logout();
   currentUser = null;
   currentFile = null;
@@ -332,16 +333,27 @@ function logout() {
   if (typeof _dashboardPollTimer !== 'undefined' && _dashboardPollTimer) {
     clearTimeout(_dashboardPollTimer); _dashboardPollTimer = null;
   }
-  resetUpload();
+  resetUpload(true);
   showPage('dashboard');
   showScreen('landing');
+  if (userName) {
+    setTimeout(() => showToast('¡Hasta pronto! 👋', `Vuelve pronto, ${userName} 🚀`), 300);
+  } else {
+    setTimeout(() => showToast('¡Hasta pronto! 👋', 'Vuelve pronto 🚀'), 300);
+  }
 }
 
 function adminLogout() {
+  const userName = currentUser?.name?.split(' ')[0] || null;
   ApiAuth.logout();
   currentUser = null;
   wantsAdmin  = false;
   showScreen('landing');
+  if (userName) {
+    setTimeout(() => showToast('¡Hasta pronto! 👋', `Vuelve pronto, ${userName} 🚀`), 300);
+  } else {
+    setTimeout(() => showToast('¡Hasta pronto! 👋', 'Vuelve pronto 🚀'), 300);
+  }
 }
 
 function goUserMode() {
@@ -1914,6 +1926,10 @@ window.analyzePrice = async function() {
   _setProgressStep('step-search',  '');
   _setProgressStep('step-compare', '');
 
+  // Labels iniciales
+  _setStepLabel('step-search',  'Buscando en tiendas');
+  _setStepLabel('step-compare', 'Comparando y normalizando precios');
+
   try {
     /* ── Paso 1: subir imagen — la IA identifica el producto ── */
     const scanResp = await ApiScan.scanImage(currentFile);
@@ -1922,6 +1938,9 @@ window.analyzePrice = async function() {
 
     _setProgressStep('step-vision', 'done');
     _setProgressStep('step-search', 'active');
+
+    // Arrancar mensajes rotativos de tiendas en los steps de búsqueda
+    _startStepStoreMessages();
 
     // Mostrar atributos IA de inmediato (vienen en la respuesta del /scan)
     if (scanResp.vision) {
@@ -1943,8 +1962,10 @@ window.analyzePrice = async function() {
       },
     });
 
+    _stopStepStoreMessages();
     _setProgressStep('step-search',  'done');
     _setProgressStep('step-compare', 'done');
+    _setStepLabel('step-compare', '¡Precios listos! ✅');
 
     /* ── Atributos reales del producto final (actualiza la tarjeta si ya estaba visible) ── */
     if (result.product) _renderAttrsCard(result.product);
@@ -1980,6 +2001,7 @@ window.analyzePrice = async function() {
     }, 1500);
 
   } catch (err) {
+    _stopStepStoreMessages();
     _hideAttrsAll();
     document.getElementById('attrs-placeholder').style.display = 'block';
     ['step-vision','step-search','step-compare'].forEach(s => _setProgressStep(s,''));
@@ -1989,6 +2011,45 @@ window.analyzePrice = async function() {
     setTimeout(() => { progress?.classList.remove('visible'); }, 1500);
   }
 };
+
+/* ── Helpers para mensajes rotativos en los steps de análisis por imagen ── */
+function _setStepLabel(stepId, text) {
+  const step = document.getElementById(stepId);
+  if (!step) return;
+  const span = step.querySelector('span');
+  if (span) span.textContent = text;
+}
+
+let _stepMsgInterval = null;
+let _stepMsgIdx = 0;
+
+const STEP_STORE_MSGS = [
+  { label: 'Buscando en Alkosto… 🏪',          store: 'Alkosto'       },
+  { label: 'Consultando Falabella… 🛍️',         store: 'Falabella'     },
+  { label: 'Explorando Éxito… 🟡',             store: 'Éxito'         },
+  { label: 'Chequeando Mercado Libre… 🟠',      store: 'Mercado Libre' },
+  { label: 'Revisando Amazon Colombia… 📦',     store: 'Amazon'        },
+  { label: 'Normalizando precios… 💱',          store: null            },
+  { label: 'Comparando resultados… 📊',         store: null            },
+];
+
+function _startStepStoreMessages() {
+  if (_stepMsgInterval) clearInterval(_stepMsgInterval);
+  _stepMsgIdx = 0;
+  _setStepLabel('step-search', STEP_STORE_MSGS[0].label);
+  _stepMsgInterval = setInterval(() => {
+    _stepMsgIdx = (_stepMsgIdx + 1) % STEP_STORE_MSGS.length;
+    const data = STEP_STORE_MSGS[_stepMsgIdx];
+    // Si el step-compare ya está activo, rotar en él; si no, en step-search
+    const compareStep = document.getElementById('step-compare');
+    const isComparing = compareStep?.classList.contains('active');
+    _setStepLabel(isComparing ? 'step-compare' : 'step-search', data.label);
+  }, 2500);
+}
+
+function _stopStepStoreMessages() {
+  if (_stepMsgInterval) { clearInterval(_stepMsgInterval); _stepMsgInterval = null; }
+}
 
 /* ── Skeletons de tarjetas de resultado ── */
 function _showResultsSkeletons(count) {
@@ -2068,7 +2129,7 @@ function _setProgressStep(stepId, state) {
 /* ────────────────────────────────────────────────
    RESET UPLOAD — también limpia attrs
    ──────────────────────────────────────────────── */
-function resetUpload() {
+function resetUpload(silent = false) {
   _clearSearchState();
   currentFile = null;
   const uploadState  = document.getElementById('upload-state');
@@ -2085,7 +2146,7 @@ function resetUpload() {
   const btn = document.getElementById('btn-analyze');
   if (btn) { btn.classList.remove('loading'); btn.disabled = false; }
   document.getElementById('results-summary')?.style.setProperty('display','none');
-  showToast('Imagen eliminada', 'Puedes cargar una nueva imagen para analizar');
+  if (!silent) showToast('Imagen eliminada', 'Puedes cargar una nueva imagen para analizar');
 }
 window.resetUpload = resetUpload;
 
