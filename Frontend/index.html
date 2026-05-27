@@ -66,15 +66,15 @@
       <figure class="landing-hero">
         <img
           src="hero.png"
-          alt="Pantalla de PriceVision mostrando comparación de precios entre Amazon $179, Mercado Libre $185, Linio $199 y Costco $215 para un smartwatch"
+          alt="Pantalla de PriceVision mostrando comparación de precios entre Amazon $179, Mercado Libre $185, Alkosto $199 y Éxito $215 para un smartwatch"
         />
         <!-- aria-hidden porque es decorativo/duplicado del alt -->
         <div class="hero-card" aria-hidden="true">
           <ul class="hero-price-list">
             <li class="hero-price"><strong>$179</strong><span>Amazon</span></li>
             <li class="hero-price"><strong>$185</strong><span>Mercado</span></li>
-            <li class="hero-price"><strong>$199</strong><span>Linio</span></li>
-            <li class="hero-price"><strong>$215</strong><span>Costco</span></li>
+            <li class="hero-price"><strong>$199</strong><span>Alkosto</span></li>
+            <li class="hero-price"><strong>$215</strong><span>Éxito</span></li>
           </ul>
         </div>
       </figure>
@@ -1106,11 +1106,56 @@
           </thead>
           <tbody id="stores-tbody">
             <tr data-custom="false">
-              <td style="font-weight:500">Falabella</td>
-              <td style="color:var(--muted);font-size:12px">https://www.falabella.com/falabella-cl</td>
+              <td style="font-weight:500">Amazon</td>
+              <td style="color:var(--muted);font-size:12px">https://www.amazon.com</td>
               <td><span class="status-badge s-green">Activo</span></td>
-              <td style="color:var(--muted)"><time datetime="2026-02-25T08:30">25/02/2026 08:30</time></td>
-              <td>1247</td>
+              <td style="color:var(--muted)"><time datetime="2026-05-27T08:30">27/05/2026 08:30</time></td>
+              <td>—</td>
+              <td>
+                <div class="actions-cell">
+                  <label class="toggle" aria-label="Activar o desactivar Amazon">
+                    <input type="checkbox" role="switch" aria-checked="true" checked onchange="toggleStore(this,'Amazon');this.setAttribute('aria-checked',this.checked)">
+                    <span class="toggle-slider" aria-hidden="true"></span>
+                  </label>
+                </div>
+              </td>
+            </tr>
+            <tr data-custom="false">
+              <td style="font-weight:500">Alkosto</td>
+              <td style="color:var(--muted);font-size:12px">https://www.alkosto.com</td>
+              <td><span class="status-badge s-green">Activo</span></td>
+              <td style="color:var(--muted)"><time datetime="2026-05-27T08:32">27/05/2026 08:32</time></td>
+              <td>—</td>
+              <td>
+                <div class="actions-cell">
+                  <label class="toggle" aria-label="Activar o desactivar Alkosto">
+                    <input type="checkbox" role="switch" aria-checked="true" checked onchange="toggleStore(this,'Alkosto');this.setAttribute('aria-checked',this.checked)">
+                    <span class="toggle-slider" aria-hidden="true"></span>
+                  </label>
+                </div>
+              </td>
+            </tr>
+            <tr data-custom="false">
+              <td style="font-weight:500">MercadoLibre</td>
+              <td style="color:var(--muted);font-size:12px">https://www.mercadolibre.com.co</td>
+              <td><span class="status-badge s-green">Activo</span></td>
+              <td style="color:var(--muted)"><time datetime="2026-05-27T08:35">27/05/2026 08:35</time></td>
+              <td>—</td>
+              <td>
+                <div class="actions-cell">
+                  <label class="toggle" aria-label="Activar o desactivar MercadoLibre">
+                    <input type="checkbox" role="switch" aria-checked="true" checked onchange="toggleStore(this,'MercadoLibre');this.setAttribute('aria-checked',this.checked)">
+                    <span class="toggle-slider" aria-hidden="true"></span>
+                  </label>
+                </div>
+              </td>
+            </tr>
+            <tr data-custom="false">
+              <td style="font-weight:500">Falabella</td>
+              <td style="color:var(--muted);font-size:12px">https://www.falabella.com.co</td>
+              <td><span class="status-badge s-green">Activo</span></td>
+              <td style="color:var(--muted)"><time datetime="2026-05-27T08:38">27/05/2026 08:38</time></td>
+              <td>—</td>
               <td>
                 <div class="actions-cell">
                   <label class="toggle" aria-label="Activar o desactivar Falabella">
@@ -1121,60 +1166,15 @@
               </td>
             </tr>
             <tr data-custom="false">
-              <td style="font-weight:500">Ripley</td>
-              <td style="color:var(--muted);font-size:12px">https://simple.ripley.cl</td>
+              <td style="font-weight:500">Éxito</td>
+              <td style="color:var(--muted);font-size:12px">https://www.exito.com</td>
               <td><span class="status-badge s-green">Activo</span></td>
-              <td style="color:var(--muted)"><time datetime="2026-02-25T08:32">25/02/2026 08:32</time></td>
-              <td>983</td>
+              <td style="color:var(--muted)"><time datetime="2026-05-27T08:41">27/05/2026 08:41</time></td>
+              <td>—</td>
               <td>
                 <div class="actions-cell">
-                  <label class="toggle" aria-label="Activar o desactivar Ripley">
-                    <input type="checkbox" role="switch" aria-checked="true" checked onchange="toggleStore(this,'Ripley');this.setAttribute('aria-checked',this.checked)">
-                    <span class="toggle-slider" aria-hidden="true"></span>
-                  </label>
-                </div>
-              </td>
-            </tr>
-            <tr data-custom="false">
-              <td style="font-weight:500">Paris</td>
-              <td style="color:var(--muted);font-size:12px">https://www.paris.cl</td>
-              <td><span class="status-badge s-green">Activo</span></td>
-              <td style="color:var(--muted)"><time datetime="2026-02-25T08:35">25/02/2026 08:35</time></td>
-              <td>1456</td>
-              <td>
-                <div class="actions-cell">
-                  <label class="toggle" aria-label="Activar o desactivar Paris">
-                    <input type="checkbox" role="switch" aria-checked="true" checked onchange="toggleStore(this,'Paris');this.setAttribute('aria-checked',this.checked)">
-                    <span class="toggle-slider" aria-hidden="true"></span>
-                  </label>
-                </div>
-              </td>
-            </tr>
-            <tr data-custom="false">
-              <td style="font-weight:500">Líder</td>
-              <td style="color:var(--muted);font-size:12px">https://www.lider.cl</td>
-              <td><span class="status-badge s-red">Inactivo</span></td>
-              <td style="color:var(--muted)"><time datetime="2026-02-25T08:28">25/02/2026 08:28</time></td>
-              <td>2103</td>
-              <td>
-                <div class="actions-cell">
-                  <label class="toggle" aria-label="Activar o desactivar Líder">
-                    <input type="checkbox" role="switch" aria-checked="false" onchange="toggleStore(this,'Líder');this.setAttribute('aria-checked',this.checked)">
-                    <span class="toggle-slider" aria-hidden="true"></span>
-                  </label>
-                </div>
-              </td>
-            </tr>
-            <tr data-custom="false">
-              <td style="font-weight:500">Mercado Libre</td>
-              <td style="color:var(--muted);font-size:12px">https://www.mercadolibre.cl</td>
-              <td><span class="status-badge s-green">Activo</span></td>
-              <td style="color:var(--muted)"><time datetime="2026-02-20T10:15">20/02/2026 10:15</time></td>
-              <td>0</td>
-              <td>
-                <div class="actions-cell">
-                  <label class="toggle" aria-label="Activar o desactivar Mercado Libre">
-                    <input type="checkbox" role="switch" aria-checked="false" onchange="toggleStore(this,'Mercado Libre');this.setAttribute('aria-checked',this.checked)">
+                  <label class="toggle" aria-label="Activar o desactivar Éxito">
+                    <input type="checkbox" role="switch" aria-checked="true" checked onchange="toggleStore(this,'Éxito');this.setAttribute('aria-checked',this.checked)">
                     <span class="toggle-slider" aria-hidden="true"></span>
                   </label>
                 </div>

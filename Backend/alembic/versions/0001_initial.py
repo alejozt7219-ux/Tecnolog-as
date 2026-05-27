@@ -117,10 +117,11 @@ def upgrade() -> None:
             sa.column('is_active', sa.Boolean),
         ),
         [
+            {'name': 'Amazon',       'base_url': 'https://www.amazon.com',          'is_active': True},
+            {'name': 'Alkosto',      'base_url': 'https://www.alkosto.com',          'is_active': True},
             {'name': 'MercadoLibre', 'base_url': 'https://www.mercadolibre.com.co', 'is_active': True},
             {'name': 'Falabella',    'base_url': 'https://www.falabella.com.co',    'is_active': True},
-            {'name': 'Linio',        'base_url': 'https://www.linio.com.co',        'is_active': True},
-            {'name': 'Amazon',       'base_url': 'https://www.amazon.com',          'is_active': True},
+            {'name': 'Éxito',        'base_url': 'https://www.exito.com',           'is_active': True},
         ]
     )
 

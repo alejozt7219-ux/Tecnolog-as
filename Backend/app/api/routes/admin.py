@@ -286,14 +286,15 @@ async def fix_default_stores(
     db: AsyncSession = Depends(get_db),
     _: User = Depends(require_admin),
 ):
-    """Limpia tiendas duplicadas/incorrectas y deja las 4 correctas."""
+    """Limpia tiendas duplicadas/incorrectas y deja las 5 correctas."""
     from app.models.product import Store
 
     CORRECT = {
-        "Falabella":    "https://www.falabella.com.co",
-        "MercadoLibre": "https://www.mercadolibre.com.co",
+        "Amazon":       "https://www.amazon.com",
         "Alkosto":      "https://www.alkosto.com",
-        "Exito":        "https://www.exito.com",
+        "MercadoLibre": "https://www.mercadolibre.com.co",
+        "Falabella":    "https://www.falabella.com.co",
+        "Éxito":        "https://www.exito.com",
     }
 
     # Eliminar tiendas incorrectas: Linio, duplicados MercadoLibre, Éxito con URL larga
@@ -323,10 +324,11 @@ async def fix_default_stores(
         if store.name == "Alkosto":
             store.base_url = "https://www.alkosto.com"
 
-    # Crear Alkosto si no existe
-    alkosto = await db.execute(select(Store).where(Store.name == "Alkosto"))
-    if not alkosto.scalar_one_or_none():
-        db.add(Store(name="Alkosto", base_url="https://www.alkosto.com", is_active=True))
+    # Crear tiendas faltantes
+    for store_name, store_url in CORRECT.items():
+        existing = await db.execute(select(Store).where(Store.name == store_name))
+        if not existing.scalar_one_or_none():
+            db.add(Store(name=store_name, base_url=store_url, is_active=True))
 
     await db.commit()
     return {"message": "Tiendas actualizadas correctamente"}
@@ -377,10 +379,16 @@ async def scraping_history(
 ):
     """Historial real de scrapings basado en SearchHistory — incluye manuales y de usuario."""
     from sqlalchemy.orm import selectinload
+    from app.models.product import PriceResult
     offset = (page - 1) * limit
     result = await db.execute(
         select(SearchHistory)
-        .options(selectinload(SearchHistory.user))
+        .options(
+            selectinload(SearchHistory.user),
+            selectinload(SearchHistory.product)
+            .selectinload(Product.prices)
+            .selectinload(PriceResult.store),
+        )
         .order_by(SearchHistory.created_at.desc())
         .offset(offset)
         .limit(limit)
@@ -395,6 +403,19 @@ async def scraping_history(
             "triggered_by_admin": h.triggered_by_admin,
             "created_at": h.created_at.isoformat(),
             "user_name": h.user.name if h.user else None,
+            "product": {
+                "id": h.product.id,
+                "name": h.product.name,
+                "prices": [
+                    {
+                        "store": {"name": pr.store.name} if pr.store else None,
+                        "price": pr.price,
+                        "currency": pr.currency,
+                        "url": pr.url,
+                    }
+                    for pr in (h.product.prices or [])
+                ],
+            } if h.product else None,
         }
         for h in histories
     ]

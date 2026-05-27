@@ -1387,7 +1387,6 @@ const CACHED_PRICES = {
       { store: { name: 'Falabella'     }, price: 109990, currency: 'COP', in_stock: true,  url: 'https://www.falabella.com.co/falabella-co/search?Ntt=mochila+portatil+impermeable' },
       { store: { name: 'Amazon'        }, price: 95000,  currency: 'COP', in_stock: true,  url: 'https://www.amazon.com/s?k=mochila+portatil+impermeable' },
       { store: { name: 'Alkosto'       }, price: 87500,  currency: 'COP', in_stock: false, url: 'https://www.alkosto.com/search?text=mochila+portatil+impermeable' },
-      { store: { name: 'Ripley'        }, price: 92000,  currency: 'COP', in_stock: true,  url: 'https://simple.ripley.com.co/buscar?query=mochila+portatil+impermeable' },
     ]
   },
   'samsung-galaxy': {
@@ -2298,7 +2297,9 @@ window.openScrapingResultModal = function(btn) {
   const modalSource = document.getElementById('srm-source');
   const modalPrices = document.getElementById('srm-prices');
 
-  if (modalQuery)  modalQuery.textContent  = item.query || '—';
+  // Mostrar nombre del producto si existe, sino la query
+  const displayName = item.product?.name || item.query || '—';
+  if (modalQuery)  modalQuery.textContent  = displayName;
   if (modalSource) modalSource.textContent = item.triggered_by_admin ? 'Admin' : 'Usuario';
   if (modalDate)   modalDate.textContent   = new Date(item.created_at).toLocaleString('es-CO');
 
@@ -2309,21 +2310,30 @@ window.openScrapingResultModal = function(btn) {
   // Precios del producto
   if (modalPrices) {
     const prices = item.product?.prices || [];
-    if (!prices.length) {
-      modalPrices.innerHTML = '<p style="color:var(--muted);text-align:center;padding:20px 0">Sin resultados de precios para esta búsqueda.</p>';
+
+    if (item.status !== 'done') {
+      // Todavía en proceso o con error
+      const msg = item.status === 'error'
+        ? '⚠️ El scraping falló para esta búsqueda.'
+        : '⏳ El scraping aún está en proceso. Intenta de nuevo en unos segundos.';
+      modalPrices.innerHTML = `<p style="color:var(--muted);text-align:center;padding:24px 0;font-size:13px">${msg}</p>`;
+    } else if (!prices.length) {
+      modalPrices.innerHTML = '<p style="color:var(--muted);text-align:center;padding:24px 0;font-size:13px">Sin resultados de precios para esta búsqueda.</p>';
     } else {
       // Ordenar de menor a mayor
       const sorted = [...prices].sort((a, b) => (a.price || 0) - (b.price || 0));
       const minPrice = sorted[0]?.price || 0;
+
+      const fmt = (v) => v >= 1000000
+        ? `$${(v/1000000).toFixed(1)}M`
+        : v >= 1000
+          ? `$${Math.round(v/1000).toLocaleString('es-CO')}k`
+          : `$${(v||0).toLocaleString('es-CO')}`;
+
       modalPrices.innerHTML = sorted.map((p, i) => {
         const isBest = i === 0;
-        const fmt = (v) => v >= 1000000
-          ? `$${(v/1000000).toFixed(1)}M`
-          : v >= 1000
-            ? `$${Math.round(v/1000).toLocaleString('es-CO')}k`
-            : `$${(v||0).toLocaleString('es-CO')}`;
         const diff = p.price && minPrice && p.price > minPrice
-          ? `<span style="color:var(--red);font-size:11px">+${fmt(p.price - minPrice)}</span>`
+          ? `<span style="color:var(--red);font-size:11px;margin-left:4px">+${fmt(p.price - minPrice)}</span>`
           : '';
         return `
           <div class="srm-price-row ${isBest ? 'srm-price-best' : ''}">
@@ -2331,8 +2341,11 @@ window.openScrapingResultModal = function(btn) {
               ${isBest ? '<span class="srm-best-tag">Mejor precio</span>' : ''}
               ${p.store?.name || p.store || 'Tienda'}
             </div>
-            <div class="srm-price-val">${fmt(p.price)} ${diff}</div>
-            ${p.url ? `<a class="srm-link" href="${p.url}" target="_blank" rel="noopener">Ver →</a>` : ''}
+            <div class="srm-price-val">${fmt(p.price)}${diff}</div>
+            ${p.url
+              ? `<a class="srm-link" href="${p.url}" target="_blank" rel="noopener noreferrer">Ver en tienda ↗</a>`
+              : '<span style="color:var(--muted);font-size:12px">Sin enlace</span>'
+            }
           </div>`;
       }).join('');
     }
