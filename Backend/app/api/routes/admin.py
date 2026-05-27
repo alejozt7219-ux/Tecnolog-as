@@ -9,6 +9,11 @@ from app.schemas.auth import UserOut, UserCreate, UserToggle
 from app.schemas.product import StoreOut, StoreCreate, ScrapingLogOut
 from app.core.security import hash_password
 import uuid
+from pydantic import BaseModel
+from typing import Optional
+
+class TriggerScrapingRequest(BaseModel):
+    query: Optional[str] = None
 
 router = APIRouter(prefix="/admin", tags=["admin"])
 
@@ -244,14 +249,18 @@ async def scraping_status(
 
 @router.post("/scraping/trigger")
 async def trigger_scraping(
+    payload: TriggerScrapingRequest = TriggerScrapingRequest(),
     db: AsyncSession = Depends(get_db),
     admin: User = Depends(require_admin),
 ):
-    import random, uuid as _uuid
-    from app.workers.tasks import scrape_product, DEMO_PRODUCTS
+    import uuid as _uuid
+    from app.workers.tasks import scrape_product
     from app.models.product import SearchHistory, TaskStatus
 
-    query   = random.choice(DEMO_PRODUCTS)
+    query = (payload.query or "").strip()
+    if not query:
+        raise HTTPException(status_code=422, detail="Debes especificar un producto a scrapear.")
+
     task_id = str(_uuid.uuid4())
 
     # Crear el historial asociado al admin, marcado como global para todos los usuarios

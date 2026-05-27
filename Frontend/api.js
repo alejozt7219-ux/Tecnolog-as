@@ -229,7 +229,11 @@ const ApiAdmin = {
   async getScrapingHistory(page = 1) {
     return apiFetch(`/admin/scraping/history?page=${page}`);
   },
-  async triggerScraping() {
-    return apiFetch('/admin/scraping/trigger', { method: 'POST' });
+  async triggerScraping(query) {
+    return apiFetch('/admin/scraping/trigger', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ query }),
+    });
   },
 };

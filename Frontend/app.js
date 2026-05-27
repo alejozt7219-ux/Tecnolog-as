@@ -660,10 +660,8 @@ async function _loadDashboard() {
       }
     } else {
       // Sin historial real — mostrar productos demo del cache
-      // y lanzar búsquedas reales en background para popular el historial
       _renderDashboardFromCache();
       countTo('cnt-products', Object.keys(CACHED_PRICES).length, 800);
-      _triggerDemoSearches();
     }
     countTo('cnt-stores', 5, 600);
     countTo('cnt-ops', 0, 600);
@@ -1288,9 +1286,11 @@ async function resetDemoProducts() {
 }
 
 async function runScraping() {
+  const query = prompt('¿Qué producto deseas scrapear?', '');
+  if (!query || !query.trim()) return;
   showLoader('Ejecutando scraping manual…');
   try {
-    const res = await ApiAdmin.triggerScraping();
+    const res = await ApiAdmin.triggerScraping(query.trim());
     hideLoader();
     const now = new Date();
 
