@@ -334,6 +334,70 @@ async def fix_default_stores(
     return {"message": "Tiendas actualizadas correctamente"}
 
 
+# ── Scraping Schedule ─────────────────────────────────
+
+SCHEDULE_REDIS_KEY = "pricevision:scraping_schedule"
+SCHEDULE_DEFAULT   = {"frequency": "daily", "hour": 8, "minute": 30, "enabled": True}
+
+def _get_redis():
+    import redis as redis_lib
+    from app.core.config import settings
+    return redis_lib.from_url(settings.REDIS_URL, decode_responses=True)
+
+def _apply_beat_schedule(hour: int, minute: int, enabled: bool):
+    """Reprograma el beat en caliente sin reiniciar el worker."""
+    from app.workers.celery_app import celery_app
+    from celery.schedules import crontab
+    if enabled:
+        celery_app.conf.beat_schedule["daily-scraping"] = {
+            "task": "app.workers.tasks.run_startup_demo_scraping",
+            "schedule": crontab(hour=hour, minute=minute),
+        }
+    else:
+        celery_app.conf.beat_schedule.pop("daily-scraping", None)
+
+class ScheduleUpdate(BaseModel):
+    frequency: str   # "daily" | "disabled"
+    hour: int
+    minute: int
+    enabled: bool
+
+@router.get("/scraping/schedule")
+async def get_scraping_schedule(
+    _: User = Depends(require_admin),
+):
+    try:
+        r = _get_redis()
+        raw = r.get(SCHEDULE_REDIS_KEY)
+        if raw:
+            import json
+            return json.loads(raw)
+    except Exception:
+        pass
+    return SCHEDULE_DEFAULT
+
+@router.post("/scraping/schedule")
+async def update_scraping_schedule(
+    payload: ScheduleUpdate,
+    _: User = Depends(require_admin),
+):
+    import json
+    data = {
+        "frequency": payload.frequency,
+        "hour":      payload.hour,
+        "minute":    payload.minute,
+        "enabled":   payload.enabled,
+    }
+    try:
+        r = _get_redis()
+        r.set(SCHEDULE_REDIS_KEY, json.dumps(data))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"No se pudo guardar el schedule en Redis: {e}")
+
+    _apply_beat_schedule(payload.hour, payload.minute, payload.enabled)
+    return {"ok": True, **data}
+
+
 @router.post("/scraping/reset-demo", status_code=200)
 async def reset_demo_products(
     db: AsyncSession = Depends(get_db),

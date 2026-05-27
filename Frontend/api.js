@@ -229,6 +229,15 @@ const ApiAdmin = {
   async getScrapingHistory(page = 1) {
     return apiFetch(`/admin/scraping/history?page=${page}`);
   },
+  async getScrapingSchedule() {
+    return apiFetch('/admin/scraping/schedule');
+  },
+  async updateScrapingSchedule(frequency, hour, minute, enabled) {
+    return apiFetch('/admin/scraping/schedule', {
+      method: 'POST',
+      body: JSON.stringify({ frequency, hour, minute, enabled }),
+    });
+  },
   async triggerScraping(query) {
     return apiFetch('/admin/scraping/trigger', {
       method: 'POST',

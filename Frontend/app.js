@@ -1102,6 +1102,82 @@ async function _loadAdminScraping() {
       if (logs?.length) _renderScrapingLogs(logs);
     }
   } catch (_) {}
+  // Cargar schedule guardado en Redis
+  _loadScheduleDisplay();
+}
+
+/* ── Schedule: cargar y mostrar ── */
+async function _loadScheduleDisplay() {
+  try {
+    const s = await ApiAdmin.getScrapingSchedule();
+    _applyScheduleToUI(s);
+  } catch (_) {}
+}
+
+function _applyScheduleToUI(s) {
+  const freqEl   = document.getElementById('sched-display-freq');
+  const timeEl   = document.getElementById('sched-display-time');
+  const statusEl = document.getElementById('sched-display-status');
+  const freqSel  = document.getElementById('sched-freq');
+  const timeInp  = document.getElementById('sched-time');
+  if (!s) return;
+
+  const enabled = s.enabled !== false && s.frequency !== 'disabled';
+  const h = String(s.hour   ?? 8).padStart(2, '0');
+  const m = String(s.minute ?? 30).padStart(2, '0');
+  const timeStr = `${h}:${m}`;
+  const displayTime = (() => {
+    const d = new Date(); d.setHours(s.hour ?? 8, s.minute ?? 30);
+    return d.toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' });
+  })();
+
+  if (freqEl)   freqEl.textContent   = enabled ? 'Diaria' : 'Desactivado';
+  if (timeEl)   timeEl.textContent   = enabled ? displayTime : '—';
+  if (statusEl) {
+    statusEl.textContent  = enabled ? 'Activo' : 'Pausado';
+    statusEl.className    = `status-badge ${enabled ? 's-green' : 's-red'}`;
+  }
+  if (freqSel)  freqSel.value  = s.frequency ?? 'daily';
+  if (timeInp)  timeInp.value  = timeStr;
+}
+
+function openScheduleEditor() {
+  document.getElementById('schedule-display').style.display = 'none';
+  document.getElementById('schedule-editor').style.display  = 'block';
+  document.getElementById('sched-freq')?.focus();
+}
+
+function closeScheduleEditor() {
+  document.getElementById('schedule-editor').style.display  = 'none';
+  document.getElementById('schedule-display').style.display = 'flex';
+}
+
+async function saveSchedule() {
+  const freqSel = document.getElementById('sched-freq');
+  const timeInp = document.getElementById('sched-time');
+  const saveBtn = document.getElementById('sched-save-btn');
+  const freq    = freqSel?.value || 'daily';
+  const time    = timeInp?.value || '08:30';
+  const [hourStr, minStr] = time.split(':');
+  const hour    = parseInt(hourStr, 10);
+  const minute  = parseInt(minStr,  10);
+  const enabled = freq !== 'disabled';
+
+  if (saveBtn) { saveBtn.textContent = 'Guardando…'; saveBtn.disabled = true; }
+  try {
+    const result = await ApiAdmin.updateScrapingSchedule(freq, hour, minute, enabled);
+    _applyScheduleToUI(result);
+    closeScheduleEditor();
+    showToast('Schedule guardado', `Scraping programado${enabled ? ` a las ${time}` : ' desactivado'} ✅`);
+    _addRecentActivity(
+      `Schedule de scraping ${enabled ? `actualizado a las ${time}` : 'desactivado'}`,
+      'Admin', enabled ? 's-green' : 's-yellow'
+    );
+  } catch (err) {
+    showToast('Error', err.message || 'No se pudo guardar el schedule', true);
+  } finally {
+    if (saveBtn) { saveBtn.textContent = 'Guardar'; saveBtn.disabled = false; }
+  }
 }
 
 /* Actualiza las tarjetas de stats de scraping (overview + sección scraping)

@@ -9,6 +9,20 @@ celery_app = Celery(
     include=["app.workers.tasks"],
 )
 
+def _load_schedule_from_redis():
+    """Lee el schedule guardado en Redis. Devuelve defaults si no hay nada."""
+    try:
+        import redis, json
+        r = redis.from_url(settings.REDIS_URL, decode_responses=True)
+        raw = r.get("pricevision:scraping_schedule")
+        if raw:
+            return json.loads(raw)
+    except Exception:
+        pass
+    return {"frequency": "daily", "hour": 8, "minute": 30, "enabled": True}
+
+_sched = _load_schedule_from_redis()
+
 celery_app.conf.update(
     task_serializer="json",
     result_serializer="json",
@@ -20,13 +34,12 @@ celery_app.conf.update(
     worker_prefetch_multiplier=1,
     broker_connection_retry_on_startup=True,
     beat_schedule={
-        # Scraping diario a las 08:30
-        "daily-scraping": {
-            "task": "app.workers.tasks.run_daily_scraping",
-            "schedule": crontab(hour=8, minute=30),
-        },
-        # Startup demo: corre 30s después de iniciar (una sola vez al día a las 00:01)
-        # Para el verdadero startup, se llama desde main.py via on_after_finalize
+        # Scraping diario — hora leída de Redis (default 08:30)
+        **({"daily-scraping": {
+            "task": "app.workers.tasks.run_startup_demo_scraping",
+            "schedule": crontab(hour=_sched["hour"], minute=_sched["minute"]),
+        }} if _sched.get("enabled", True) else {}),
+        # Startup demo: corre una vez al día a las 00:01
         "startup-demo-daily": {
             "task": "app.workers.tasks.run_startup_demo_scraping",
             "schedule": crontab(hour=0, minute=1),

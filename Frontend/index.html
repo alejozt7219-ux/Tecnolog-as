@@ -1224,7 +1224,30 @@
       </header>
 
       <ul class="stats-grid" role="list" aria-label="Estadísticas de scraping">
-        <li class="stat-card" role="listitem"><div class="stat-label">Frecuencia programada</div><div class="stat-val" style="font-size:22px">Diaria</div><span class="stat-tag tag-muted" style="font-size:10px">08:30 AM</span></li>
+        <li class="stat-card" role="listitem" id="schedule-card" style="grid-column:span 2">
+          <div class="stat-label">Frecuencia programada</div>
+          <div id="schedule-display" style="display:flex;align-items:center;gap:12px;margin-top:6px">
+            <div class="stat-val" style="font-size:22px" id="sched-display-freq">Diaria</div>
+            <span class="stat-tag tag-muted" style="font-size:11px" id="sched-display-time">08:30 AM</span>
+            <span class="status-badge s-green" id="sched-display-status">Activo</span>
+            <button class="btn-sm" style="margin-left:auto" onclick="openScheduleEditor()" aria-label="Editar frecuencia de scraping">✏️ Editar</button>
+          </div>
+          <div id="schedule-editor" style="display:none;margin-top:10px">
+            <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+              <select id="sched-freq" style="background:var(--card2);color:var(--text);border:1px solid var(--border);border-radius:8px;padding:6px 10px;font-size:13px" aria-label="Frecuencia de scraping">
+                <option value="daily">Diaria</option>
+                <option value="disabled">Desactivado</option>
+              </select>
+              <label style="font-size:13px;color:var(--muted)">Hora:</label>
+              <input type="time" id="sched-time" value="08:30"
+                style="background:var(--card2);color:var(--text);border:1px solid var(--border);border-radius:8px;padding:6px 10px;font-size:13px"
+                aria-label="Hora de ejecución del scraping programado" />
+              <button class="btn-sm" onclick="saveSchedule()" style="background:var(--accent);color:#fff;border:none" id="sched-save-btn">Guardar</button>
+              <button class="btn-sm" onclick="closeScheduleEditor()" style="color:var(--muted)">Cancelar</button>
+            </div>
+            <p style="font-size:11px;color:var(--muted);margin-top:8px">⚠️ Solo aplica a los 5 productos predeterminados. Requiere que el worker de Celery Beat esté corriendo.</p>
+          </div>
+        </li>
         <li class="stat-card" role="listitem"><div class="stat-label">Última ejecución</div><div class="stat-val" style="font-size:20px" id="last-execution-date" aria-live="polite">—</div><span class="status-badge s-green" style="margin-top:6px" id="last-execution-status">—</span></li>
         <li class="stat-card" role="listitem"><div class="stat-label">Productos hoy</div><div class="stat-val" style="color:var(--green)" id="scraping-products-today">—</div><span class="stat-tag tag-muted">Extraídos exitosamente</span></li>
         <li class="stat-card" role="listitem"><div class="stat-label">Duración promedio</div><div class="stat-val">3.4<span style="font-size:14px;color:var(--muted)"> m</span></div><span class="stat-tag tag-muted">Últimas 5 ejecuciones</span></li>
