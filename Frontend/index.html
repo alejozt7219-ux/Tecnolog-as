@@ -1316,6 +1316,99 @@
   </main>
 </div><!-- /admin -->
 
+<!-- ── PANTALLA DE BÚSQUEDA ANIMADA (modo usuario) ── -->
+<div id="search-loading-overlay" role="status" aria-live="assertive" aria-label="Buscando precios" style="
+  display:none;
+  position:fixed;inset:0;z-index:9000;
+  background:var(--bg,#0f1117);
+  flex-direction:column;align-items:center;justify-content:center;gap:32px;
+">
+  <!-- Logo / ícono central animado -->
+  <div style="position:relative;width:96px;height:96px;">
+    <!-- Anillo exterior pulsante -->
+    <div id="slo-ring-outer" style="
+      position:absolute;inset:-12px;border-radius:50%;
+      border:2px solid var(--accent,#7c6fff);opacity:.25;
+      animation:slo-pulse 2s ease-in-out infinite;
+    "></div>
+    <!-- Anillo giratorio -->
+    <div style="
+      position:absolute;inset:0;border-radius:50%;
+      border:3px solid transparent;
+      border-top-color:var(--accent,#7c6fff);
+      border-right-color:var(--accent,#7c6fff);
+      animation:slo-spin 1s linear infinite;
+    "></div>
+    <!-- Ícono central -->
+    <div style="
+      position:absolute;inset:12px;border-radius:50%;
+      background:linear-gradient(135deg,var(--accent,#7c6fff)22,#5a4fd6);
+      display:flex;align-items:center;justify-content:center;font-size:24px;
+    ">🔍</div>
+  </div>
+
+  <!-- Barra de progreso -->
+  <div style="width:min(320px,80vw);display:flex;flex-direction:column;gap:12px;">
+    <div style="height:4px;background:var(--border,rgba(255,255,255,.08));border-radius:100px;overflow:hidden;">
+      <div id="slo-bar" style="
+        height:100%;width:0%;border-radius:100px;
+        background:linear-gradient(90deg,var(--accent,#7c6fff),#a594ff);
+        transition:width .6s ease;
+      "></div>
+    </div>
+
+    <!-- Nombre del producto buscado -->
+    <div id="slo-product" style="
+      text-align:center;font-size:13px;color:var(--muted,#888);
+      font-family:var(--font-head,'Inter',sans-serif);
+    "></div>
+  </div>
+
+  <!-- Mensaje rotativo -->
+  <div style="text-align:center;max-width:300px;">
+    <p id="slo-msg" style="
+      font-family:var(--font-head,'Inter',sans-serif);
+      font-size:16px;font-weight:600;color:var(--text,#f0f0f0);
+      min-height:28px;
+      transition:opacity .35s ease,transform .35s ease;
+    ">Iniciando búsqueda…</p>
+    <p id="slo-sub" style="font-size:13px;color:var(--muted,#888);margin-top:6px;">Esto puede tomar unos segundos</p>
+  </div>
+
+  <!-- Tiendas activas -->
+  <div id="slo-stores" style="display:flex;gap:10px;flex-wrap:wrap;justify-content:center;max-width:360px;">
+    <span class="slo-store-chip" data-store="Alkosto">🏪 Alkosto</span>
+    <span class="slo-store-chip" data-store="Falabella">🛍️ Falabella</span>
+    <span class="slo-store-chip" data-store="Éxito">🟡 Éxito</span>
+    <span class="slo-store-chip" data-store="Mercado Libre">🟠 Mercado Libre</span>
+    <span class="slo-store-chip" data-store="Amazon">📦 Amazon</span>
+  </div>
+</div>
+
+<style>
+@keyframes slo-spin  { to { transform:rotate(360deg); } }
+@keyframes slo-pulse { 0%,100%{transform:scale(1);opacity:.25} 50%{transform:scale(1.15);opacity:.45} }
+
+.slo-store-chip {
+  padding:6px 14px;border-radius:100px;font-size:12px;font-weight:500;
+  background:var(--surface,rgba(255,255,255,.06));
+  border:1px solid var(--border,rgba(255,255,255,.08));
+  color:var(--muted,#888);
+  transition:background .3s,color .3s,border-color .3s,transform .2s;
+}
+.slo-store-chip.active {
+  background:rgba(124,111,255,.18);
+  border-color:var(--accent,#7c6fff);
+  color:var(--accent,#7c6fff);
+  transform:scale(1.06);
+}
+.slo-store-chip.done {
+  background:rgba(34,217,142,.12);
+  border-color:#22d98e;
+  color:#22d98e;
+}
+</style>
+
 <script src="api.js"></script>
 <script src="app.js"></script>
 </body>

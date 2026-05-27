@@ -20,10 +20,10 @@ SCRAPER_MAP = {
 
 # Productos predeterminados — se cargan automáticamente al iniciar
 DEMO_PRODUCTS = [
-    "Nike Air Max",
+    "Nike Air Max 90",
     "Auriculares Sony WH-CH520",
     "Mochila portatil impermeable",
-    "Smartwatch Samsung Galaxy Watch",
+    "Samsung Galaxy Watch6",
     "Cafetera Nespresso",
 ]
 

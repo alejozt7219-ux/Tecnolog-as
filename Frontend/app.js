@@ -677,10 +677,10 @@ async function _loadDashboard() {
 /* Lanza búsquedas por texto de los 5 productos demo en background */
 async function _triggerDemoSearches() {
   const DEMO_QUERIES = [
-    'Nike Air Max',
+    'Nike Air Max 90',
     'Auriculares Sony WH-CH520',
     'Mochila portatil impermeable',
-    'Smartwatch Samsung Galaxy Watch',
+    'Samsung Galaxy Watch6',
     'Cafetera Nespresso',
   ];
   // Lanzar los 5 en paralelo sin bloquear la UI
@@ -2125,5 +2125,204 @@ window.showScreen = function(id) {
         _renderDashboardFromCache();
       }
     }, 300);
+  }
+};
+/* ═══════════════════════════════════════════════════════
+   PANTALLA DE CARGA ANIMADA — Búsqueda manual modo usuario
+   Reemplaza el prompt() + showLoader genérico por una
+   experiencia inmersiva con mensajes rotativos y polling
+   en tiempo real que lleva directo a resultados.
+   ═══════════════════════════════════════════════════════ */
+
+const SLO_MESSAGES = [
+  { msg: 'Buscando en Alkosto…',          sub: 'Revisando catálogo completo',               store: 'Alkosto'       },
+  { msg: 'Consultando Falabella…',         sub: 'Comparando modelos disponibles',             store: 'Falabella'     },
+  { msg: 'Explorando Éxito…',             sub: 'Verificando stock y precios actuales',        store: 'Éxito'         },
+  { msg: 'Chequeando Mercado Libre…',      sub: 'Filtrando las mejores ofertas',              store: 'Mercado Libre' },
+  { msg: 'Revisando Amazon Colombia…',     sub: 'Precios en COP confirmados',                 store: 'Amazon'        },
+  { msg: 'Normalizando precios…',          sub: 'Convirtiendo todo a pesos colombianos',      store: null            },
+  { msg: 'Comparando resultados…',         sub: 'Ordenando del mejor al peor precio',         store: null            },
+  { msg: 'Casi listo…',                   sub: 'Preparando tu comparativa',                  store: null            },
+];
+
+let _sloInterval = null;
+let _sloMsgIndex = 0;
+
+function _showSearchOverlay(productQuery) {
+  const overlay  = document.getElementById('search-loading-overlay');
+  const bar      = document.getElementById('slo-bar');
+  const msgEl    = document.getElementById('slo-msg');
+  const subEl    = document.getElementById('slo-sub');
+  const prodEl   = document.getElementById('slo-product');
+  if (!overlay) return;
+
+  // Reset chips
+  document.querySelectorAll('.slo-store-chip').forEach(c => {
+    c.classList.remove('active','done');
+  });
+
+  if (prodEl) prodEl.textContent = `Buscando: "${productQuery}"`;
+  if (bar)    bar.style.width = '0%';
+  if (msgEl)  msgEl.textContent = 'Iniciando búsqueda…';
+  if (subEl)  subEl.textContent = 'Conectando con las tiendas';
+
+  overlay.style.display = 'flex';
+  _sloMsgIndex = 0;
+
+  // Arrancar rotación de mensajes
+  if (_sloInterval) clearInterval(_sloInterval);
+  _sloInterval = setInterval(() => {
+    _sloMsgIndex = Math.min(_sloMsgIndex + 1, SLO_MESSAGES.length - 1);
+    _sloSetMessage(_sloMsgIndex);
+    // Progreso proporcional al mensaje actual
+    const pct = Math.round((_sloMsgIndex / (SLO_MESSAGES.length - 1)) * 85);
+    if (bar) bar.style.width = pct + '%';
+  }, 2800);
+}
+
+function _sloSetMessage(idx) {
+  const data  = SLO_MESSAGES[idx];
+  const msgEl = document.getElementById('slo-msg');
+  const subEl = document.getElementById('slo-sub');
+  if (!data) return;
+
+  // Fade out → actualizar → fade in
+  if (msgEl) {
+    msgEl.style.opacity   = '0';
+    msgEl.style.transform = 'translateY(6px)';
+    setTimeout(() => {
+      msgEl.textContent     = data.msg;
+      msgEl.style.opacity   = '1';
+      msgEl.style.transform = 'translateY(0)';
+    }, 200);
+  }
+  if (subEl) subEl.textContent = data.sub;
+
+  // Activar chip de la tienda correspondiente
+  document.querySelectorAll('.slo-store-chip').forEach(c => {
+    if (c.classList.contains('done')) return;
+    if (c.dataset.store === data.store) {
+      c.classList.add('active');
+    } else if (c.classList.contains('active')) {
+      // la anterior pasa a "done"
+      c.classList.remove('active');
+      c.classList.add('done');
+    }
+  });
+}
+
+function _hideSearchOverlay(success = true) {
+  if (_sloInterval) { clearInterval(_sloInterval); _sloInterval = null; }
+
+  const overlay = document.getElementById('search-loading-overlay');
+  const bar     = document.getElementById('slo-bar');
+  const msgEl   = document.getElementById('slo-msg');
+  const subEl   = document.getElementById('slo-sub');
+
+  if (bar)   bar.style.width = '100%';
+
+  if (success) {
+    // Marcar todas las tiendas como done
+    document.querySelectorAll('.slo-store-chip').forEach(c => {
+      c.classList.remove('active');
+      c.classList.add('done');
+    });
+    if (msgEl) msgEl.textContent = '¡Precios encontrados!';
+    if (subEl) subEl.textContent = 'Llevándote a los resultados…';
+  } else {
+    if (msgEl) msgEl.textContent = 'No se encontraron resultados';
+    if (subEl) subEl.textContent = '';
+  }
+
+  // Fade out suave y luego ocultar
+  setTimeout(() => {
+    if (overlay) {
+      overlay.style.transition = 'opacity .4s ease';
+      overlay.style.opacity    = '0';
+      setTimeout(() => {
+        overlay.style.display    = 'none';
+        overlay.style.opacity    = '1';
+        overlay.style.transition = '';
+      }, 420);
+    }
+  }, 700);
+}
+
+/* ── Override runScraping para modo USUARIO (analista) ──────────────────
+   En admin ya existe y funciona bien con showLoader + tabla de historial.
+   Aquí interceptamos cuando currentUser NO es admin para usar la overlay.
+   ──────────────────────────────────────────────────────────────────────── */
+const _origRunScraping = window.runScraping || runScraping;
+
+window.runScraping = async function() {
+  // Si el usuario es admin, usar el flujo original (tabla de historial admin)
+  if (currentUser?.role === 'admin') {
+    return _origRunScraping();
+  }
+
+  // Modo analista: pantalla de carga animada → resultados
+  const query = prompt('¿Qué producto quieres buscar?', '');
+  if (!query || !query.trim()) return;
+  const q = query.trim();
+
+  _showSearchOverlay(q);
+
+  try {
+    // 1. Encolar scraping
+    const res = await ApiScan.searchByText(q);
+    if (!res?.task_id) throw new Error('No se pudo iniciar la búsqueda');
+
+    const taskId = res.task_id;
+
+    // 2. Polling con mensajes progresivos
+    const result = await ApiScan.pollResults(taskId, {
+      intervalMs:  2800,
+      maxAttempts: 35,
+      onProgress: (status) => {
+        // El progreso visual ya lo maneja el intervalo; aquí podríamos ajustar
+        if (status === 'done' || status === 'error') {
+          if (_sloInterval) { clearInterval(_sloInterval); _sloInterval = null; }
+        }
+      },
+    });
+
+    // 3. Éxito: completar barra, ocultar overlay con animación, ir a resultados
+    _hideSearchOverlay(true);
+
+    searchDone    = true;
+    activeResults = result.product?.prices || [];
+    lastAnalysis  = { name: result.product?.name || q, prices: activeResults, timestamp: Date.now() };
+
+    const sub = document.getElementById('results-sub');
+    if (sub) sub.textContent = `Comparación de precios: ${lastAnalysis.name}`;
+    _resetFilters();
+
+    // Transición limpia: esperar que la overlay desaparezca, luego navegar
+    setTimeout(() => {
+      showPage('results');
+      // Skeletons primero, luego render real con animación
+      _showResultsSkeletons(activeResults.length || 4);
+      setTimeout(() => {
+        _renderApiResults(activeResults);
+        showToast('¡Búsqueda completada!',
+          `${activeResults.length} precio${activeResults.length !== 1 ? 's' : ''} encontrado${activeResults.length !== 1 ? 's' : ''} en ${[...new Set(activeResults.map(p => p.store?.name))].length} tiendas`
+        );
+      }, 500);
+    }, 900);
+
+    // Actualizar dashboard en background
+    setTimeout(async () => {
+      try {
+        const hist = await ApiScan.getGlobalHistory(1, 10);
+        const done = hist?.filter(h => h.product && h.status === 'done') || [];
+        if (done.length) _renderDashboardHistory(done.slice(0, 5));
+      } catch (_) {}
+    }, 1800);
+
+  } catch (err) {
+    _hideSearchOverlay(false);
+    setTimeout(() => {
+      showToast('Error en búsqueda', err.message || 'No se encontraron resultados', true);
+    }, 600);
   }
 };
