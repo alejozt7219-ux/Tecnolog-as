@@ -1,21 +1,29 @@
 """
 Alkosto Colombia — scraper Playwright con selectores Algolia reales (2025).
-Alkosto usa Algolia como motor de búsqueda.
-
-Selectores verificados en el HTML real:
+Selectores verificados en HTML real (mayo 2025):
   - Contenedor: li.ais-InfiniteHits-item
-  - Título:     h3.product__item__top__title  (dentro del li)
-  - Precio:     span.price.price--redesign    (contiene "$1.799.900")
-  - Link:       a.product__item__top__link    (href="/reloj-samsung.../p/...")
-
-Nota: el precio viene como:
-  <span class="price price--redesign"><span>$</span>1.799.900</span>
-  inner_text() retorna "$1.799.900" que limpiamos correctamente.
+  - Título:     h3.product__item__top__title
+  - Precio:     span.price.price--redesign
+  - Link:       a.product__item__top__link
 """
 from app.scraper.base import BaseScraper, ScrapedPrice
 import logging
+import re
+import unicodedata
 
 logger = logging.getLogger(__name__)
+
+
+def _normalize(text: str) -> str:
+    text = unicodedata.normalize("NFKD", text).encode("ascii", "ignore").decode()
+    return re.sub(r"[^\w\s]", "", text).lower()
+
+
+def _is_relevant(title: str, query: str, min_words: int = 2) -> bool:
+    q_words = [w for w in _normalize(query).split() if len(w) > 2]
+    t_norm  = _normalize(title)
+    matches = sum(1 for w in q_words if re.search(r"\b" + w + r"\b", t_norm))
+    return matches >= min(min_words, len(q_words))
 
 
 class AlkostoScraper(BaseScraper):
@@ -31,33 +39,27 @@ class AlkostoScraper(BaseScraper):
 
             await page.set_extra_http_headers({
                 "Accept-Language": "es-CO,es;q=0.9",
+                "Referer": self.base_url,
             })
 
-            await page.goto(search_url, wait_until="domcontentloaded", timeout=self._timeout())
+            await page.goto(search_url, wait_until="networkidle", timeout=self._timeout())
 
-            # Algolia renderiza con: li.ais-InfiniteHits-item
             try:
-                await page.wait_for_selector(
-                    "li.ais-InfiniteHits-item",
-                    timeout=20000,
-                )
+                await page.wait_for_selector("li.ais-InfiniteHits-item", timeout=30000)
             except Exception:
-                logger.warning(f"[Alkosto] Timeout esperando productos para '{query}'")
-                return results
+                count = await page.locator("li.ais-InfiniteHits-item").count()
+                if count == 0:
+                    logger.warning(f"[Alkosto] Sin resultados para '{query}'")
+                    return results
 
             items = await page.query_selector_all("li.ais-InfiniteHits-item")
+            logger.debug(f"[Alkosto] {len(items)} items encontrados para '{query}'")
 
-            for item in items[:8]:
+            for item in items[:12]:
                 try:
-                    # Título — selector verificado en HTML real
                     title_el = await item.query_selector("h3.product__item__top__title")
-
-                    # Precio — "span.price.price--redesign" verificado en HTML real
-                    # inner_text da "$1.799.900"
                     price_el = await item.query_selector("span.price.price--redesign")
-
-                    # Link — "a.product__item__top__link" verificado en HTML real
-                    link_el = (
+                    link_el  = (
                         await item.query_selector("a.product__item__top__link") or
                         await item.query_selector("a[href*='/p/']")
                     )
@@ -68,11 +70,15 @@ class AlkostoScraper(BaseScraper):
                     title     = (await title_el.inner_text()).strip()
                     price_raw = (await price_el.inner_text()).strip()
 
-                    # Limpiar: "$1.799.900" → 1799900
+                    # Filtrar por relevancia — igual que Falabella
+                    if not _is_relevant(title, query):
+                        logger.debug(f"[Alkosto] Descartado: '{title}' para '{query}'")
+                        continue
+
                     price_str = (
                         price_raw
                         .replace("$", "")
-                        .replace(".", "")   # separador de miles en Colombia
+                        .replace(".", "")
                         .replace(",", "")
                         .strip()
                         .split()[0]
@@ -86,7 +92,9 @@ class AlkostoScraper(BaseScraper):
                         continue
 
                     href = await link_el.get_attribute("href") if link_el else ""
-                    url  = f"{self.base_url}{href}" if href and href.startswith("/") else href
+                    if href and "?" in href:
+                        href = href.split("?")[0]
+                    url = f"{self.base_url}{href}" if href and href.startswith("/") else href
 
                     results.append(
                         ScrapedPrice(
@@ -98,6 +106,10 @@ class AlkostoScraper(BaseScraper):
                             in_stock=True,
                         )
                     )
+
+                    if len(results) >= 3:
+                        break
+
                 except Exception as e:
                     logger.debug(f"[Alkosto] Error parseando item: {e}")
                     continue
@@ -107,6 +119,7 @@ class AlkostoScraper(BaseScraper):
         finally:
             await page.close()
 
+        logger.info(f"[Alkosto] {len(results)} resultados para '{query}'")
         return results
 
     def _timeout(self):
