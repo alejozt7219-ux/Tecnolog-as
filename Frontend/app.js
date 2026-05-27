@@ -165,7 +165,7 @@ function goAdminLogin() {
 }
 
 function goRegister() {
-  ['reg-name','reg-email','reg-org','reg-pass','reg-pass2'].forEach(id => {
+  ['reg-name','reg-email','reg-pass','reg-pass2'].forEach(id => {
     const el = document.getElementById(id);
     if (el) el.value = '';
   });
@@ -256,7 +256,7 @@ async function doRegister() {
 
   const name  = document.getElementById('reg-name')?.value.trim()  || '';
   const email = document.getElementById('reg-email')?.value.trim() || '';
-  const org   = document.getElementById('reg-org')?.value.trim()   || '';
+
   const role  = document.getElementById('reg-role')?.value         || '';
   const pass  = document.getElementById('reg-pass')?.value         || '';
   const pass2 = document.getElementById('reg-pass2')?.value        || '';
@@ -268,7 +268,6 @@ async function doRegister() {
   else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
     showFieldError('reg-email', 'reg-email-error', 'Ingresa un correo válido'); hasError = true;
   }
-  if (!org)   { showFieldError('reg-org',   'reg-org-error',   'La organización es obligatoria'); hasError = true; }
   if (!role)  { showFieldError('reg-role',  'reg-role-error',  'Selecciona un rol'); hasError = true; }
   if (role === 'admin' && !/@admin\./.test(email)) {
     showFieldError('reg-email', 'reg-email-error', 'Los administradores deben usar un correo tipo nombre@admin.com'); hasError = true;

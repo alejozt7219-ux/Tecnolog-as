@@ -1343,16 +1343,22 @@ tbody tr:hover { background: var(--bg3); }
   color: var(--accent2, #7c6fff);
   border: 1px solid var(--border);
   width: 36px; height: 36px; border-radius: 10px;
-  transition: background .2s, color .2s, box-shadow .2s, transform .35s ease, border-color .2s;
+  transition: background .2s, color .2s, box-shadow .2s, border-color .2s;
 }
 .icon-btn--refresh:hover {
   background: rgba(124,111,255,.15);
   color: var(--accent, #7c6fff);
   border-color: var(--accent, #7c6fff);
   box-shadow: 0 0 0 3px rgba(124,111,255,.15);
+}
+/* El SVG dentro del refresh sí rota, no el botón completo */
+.icon-btn--refresh svg {
+  transition: transform .4s ease;
+}
+.icon-btn--refresh:hover svg {
   transform: rotate(180deg);
 }
-/* Tooltip del botón refresh: aparece hacia abajo-izquierda para no salirse de pantalla */
+/* Tooltip del botón refresh: aparece hacia abajo-derecha para no salirse de pantalla */
 .icon-btn--refresh[data-tooltip]::after {
   bottom: auto;
   top: calc(100% + 8px);
@@ -1364,6 +1370,8 @@ tbody tr:hover { background: var(--bg3); }
   border-radius: 8px;
   white-space: nowrap;
   box-shadow: 0 8px 24px rgba(0,0,0,.4);
+  /* Importante: el tooltip no hereda la rotación */
+  rotate: none;
 }
 
 /* Tooltip estilizado para botones con data-tooltip */
