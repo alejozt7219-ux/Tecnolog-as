@@ -393,6 +393,25 @@ async def update_scraping_schedule(
         raise HTTPException(status_code=500, detail=f"No se pudo guardar el schedule en Redis: {e}")
 
     _apply_beat_schedule(payload.hour, payload.minute, payload.enabled)
+
+    # Si la hora configurada es ahora o en los próximos 2 minutos, disparar YA
+    # (el crontab pierde el disparo si el beat no lo tenía cargado antes del minuto exacto)
+    if payload.enabled and payload.frequency != "disabled":
+        from datetime import datetime, timezone
+        import pytz
+        bogota = pytz.timezone("America/Bogota")
+        now = datetime.now(bogota)
+        target_minutes = payload.hour * 60 + payload.minute
+        current_minutes = now.hour * 60 + now.minute
+        diff = target_minutes - current_minutes
+        if -1 <= diff <= 2:  # entre 1 min antes y 2 min después
+            try:
+                from app.workers.tasks import run_startup_demo_scraping
+                run_startup_demo_scraping.delay()
+            except Exception as e:
+                import logging
+                logging.getLogger(__name__).warning(f"[Schedule] No se pudo disparar tarea inmediata: {e}")
+
     return {"ok": True, **data}
 
 

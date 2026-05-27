@@ -15,6 +15,115 @@ let activeResults  = [];
 // Último análisis completado — puede mostrarse como banner en Results
 let lastAnalysis   = null; // { name, prices, timestamp }
 
+// Log de actividad reciente en memoria — persiste entre navegaciones de sección
+// Cada item: { desc, tipo, statusClass, ts }  (ts = timestamp ms)
+const _activityLog = [];
+
+/* ═══════════════════ SCRAPING NOTIFICATION POLLER ═══════════════════
+   Corre en background mientras el admin está logueado.
+   Detecta cuando termina cada producto (predeterminado o automático)
+   y muestra un toast + actividad reciente.                           */
+let _scrapingNotifTimer  = null;
+let _notifiedTaskIds     = new Set();   // IDs ya notificados (evita duplicados)
+let _pendingBatchIds     = new Set();   // task_ids de un batch en progreso
+let _pendingBatchLabel   = '';          // 'auto' | 'manual' | 'demo'
+let _pendingBatchTotal   = 0;
+let _pendingBatchDone    = 0;
+let _pendingBatchErrors  = 0;
+
+function _startScrapingNotifPoller() {
+  if (_scrapingNotifTimer) return;   // ya corriendo
+  _scrapingNotifPoller();
+}
+
+function _stopScrapingNotifPoller() {
+  if (_scrapingNotifTimer) { clearTimeout(_scrapingNotifTimer); _scrapingNotifTimer = null; }
+}
+
+async function _scrapingNotifPoller() {
+  _scrapingNotifTimer = null;
+  try {
+    if (!currentUser) return;   // se deslogueó
+
+    const history = await ApiAdmin.getScrapingHistory(1).catch(() => null);
+    if (history && history.length) {
+      // Buscar items recientes (últimos 10 min) no notificados aún
+      const cutoff = Date.now() - 10 * 60 * 1000;
+      const recent = history.filter(h => new Date(h.created_at).getTime() > cutoff);
+
+      // Notificar completados individualmente
+      for (const h of recent) {
+        if (_notifiedTaskIds.has(h.task_id)) continue;
+        const isDone  = h.status === 'done';
+        const isError = h.status === 'error';
+        if (!isDone && !isError) continue;   // todavía en proceso
+
+        _notifiedTaskIds.add(h.task_id);
+
+        const productName = h.query || h.product?.name || 'Producto';
+        const isAuto = !h.triggered_by_admin;
+        const label  = isAuto ? '🤖 Scraping automático' : '🔍 Scraping';
+
+        if (isDone) {
+          const priceCount = h.product?.prices?.length || 0;
+          showToast(
+            `${label}: ${productName}`,
+            `✅ Completado${priceCount ? ` · ${priceCount} precios encontrados` : ''}`
+          );
+          _addRecentActivity(
+            `${isAuto ? 'Scraping automático' : 'Scraping'}: ${productName}`,
+            isAuto ? 'Automático' : 'Admin', 's-green'
+          );
+        } else {
+          showToast(`${label}: ${productName}`, '❌ Falló el scraping', true);
+          _addRecentActivity(
+            `Error scraping: ${productName}`,
+            isAuto ? 'Automático' : 'Admin', 's-red'
+          );
+        }
+
+        // Si estaba en un batch, contar progreso
+        if (_pendingBatchIds.has(h.task_id)) {
+          _pendingBatchDone++;
+          if (isError) _pendingBatchErrors++;
+          _pendingBatchIds.delete(h.task_id);
+
+          // Cuando termina el batch completo → toast de resumen
+          if (_pendingBatchIds.size === 0 && _pendingBatchTotal > 0) {
+            const ok  = _pendingBatchDone - _pendingBatchErrors;
+            const tag = _pendingBatchLabel === 'auto' ? '🤖 Scraping automático' : '🔄 Re-scraping';
+            showToast(
+              `${tag} completado`,
+              `${ok}/${_pendingBatchTotal} productos actualizados${_pendingBatchErrors ? ` · ${_pendingBatchErrors} errores` : ' ✅'}`
+            );
+            _addRecentActivity(
+              `${tag} completado: ${ok}/${_pendingBatchTotal} productos`,
+              'Sistema', ok === _pendingBatchTotal ? 's-green' : 's-yellow'
+            );
+            _pendingBatchTotal = 0; _pendingBatchDone = 0; _pendingBatchErrors = 0;
+            // Refrescar tabla de scraping si está visible
+            try { await _loadAdminScraping(); } catch (_) {}
+          }
+        }
+      }
+    }
+  } catch (_) {}
+
+  // Repetir cada 8 segundos si el admin sigue logueado
+  if (currentUser && currentUser.role === 'admin') {
+    _scrapingNotifTimer = setTimeout(_scrapingNotifPoller, 8000);
+  }
+}
+
+/* Registra un batch de task_ids para rastrear su progreso como grupo */
+function _trackScrapingBatch(taskIds, label = 'demo') {
+  taskIds.forEach(id => _pendingBatchIds.add(id));
+  _pendingBatchLabel  = label;
+  _pendingBatchTotal  = taskIds.length;
+  _pendingBatchDone   = 0;
+  _pendingBatchErrors = 0;
+}
+
 /* Limpia todo el estado de búsqueda — usar siempre antes de iniciar
    una nueva búsqueda o al borrar historial */
 function _clearSearchState() {
@@ -152,6 +261,7 @@ function goAdminLogin() {
     showAdminPage('overview');
     _loadAdminOverview();
     setTimeout(() => showToast('Modo administrador', `Bienvenido al panel, ${currentUser.name.split(' ')[0]} 🛠️`), 400);
+  _startScrapingNotifPoller();
     return;
   }
   const greeting = document.getElementById('login-greeting');
@@ -412,6 +522,8 @@ function showAdminPage(name) {
   if (name === 'tiendas')   _loadAdminStores();
   if (name === 'usuarios')  _loadAdminUsers();
   if (name === 'scraping')  _loadAdminScraping();
+  // Asegurar que el poller de notificaciones está activo
+  if (currentUser?.role === 'admin') _startScrapingNotifPoller();
 }
 
 /* ── Botones "Ver Detalles" del historial del dashboard ── */
@@ -1169,6 +1281,13 @@ async function saveSchedule() {
     _applyScheduleToUI(result);
     closeScheduleEditor();
     showToast('Schedule guardado', `Scraping programado${enabled ? ` a las ${time}` : ' desactivado'} ✅`);
+    // Si era hora actual, avisar que se está ejecutando ahora
+    const now2 = new Date();
+    const [hh, mm] = time.split(':').map(Number);
+    const diffMin = (hh * 60 + mm) - (now2.getHours() * 60 + now2.getMinutes());
+    if (Math.abs(diffMin) <= 2 && enabled) {
+      setTimeout(() => showToast('🤖 Scraping automático', 'Ejecutando ahora mismo… te avisaré cuando termine cada producto'), 800);
+    }
     _addRecentActivity(
       `Schedule de scraping ${enabled ? `actualizado a las ${time}` : 'desactivado'}`,
       'Admin', enabled ? 's-green' : 's-yellow'
@@ -1300,24 +1419,40 @@ function _renderScrapingLogs(logs) {
 /* ── Admin overview: stats reales ─────────────── */
 /* Agrega una fila al tope de Actividad Reciente en el overview */
 function _addRecentActivity(desc, tipo, statusClass) {
+  // Guardar en memoria para que persista entre navegaciones
+  _activityLog.unshift({ desc, tipo, statusClass, ts: Date.now() });
+  if (_activityLog.length > 20) _activityLog.pop();
+
+  // Si el overview está visible, re-renderizar
   const tbody = document.querySelector('#admin-page-overview .table-wrap tbody');
-  if (!tbody) return;
-  const now = new Date().toLocaleString('es-CO');
-  const statusHtml = statusClass
-    ? `<span class="status-badge ${statusClass}">${statusClass === 's-green' ? 'Exitoso' : statusClass === 's-red' ? 'Error' : statusClass === 's-yellow' ? 'En proceso' : 'Aviso'}</span>`
-    : '<span style="color:var(--muted)">—</span>';
-  const row = document.createElement('tr');
-  row.innerHTML = `
-    <td><div class="act-icon"><svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg></div></td>
-    <td>${desc}</td>
-    <td style="color:var(--muted)">${tipo}</td>
-    <td style="color:var(--muted)"><time>${now}</time></td>
-    <td>${statusHtml}</td>
-  `;
-  tbody.insertBefore(row, tbody.firstChild);
-  // Mantener máx 10 filas
-  while (tbody.rows.length > 10) tbody.deleteRow(tbody.rows.length - 1);
+  if (tbody) _renderActivityLog(tbody);
 }
+
+/* Renderiza _activityLog en el tbody del overview, al tope de las filas de BD */
+function _renderActivityLog(tbody) {
+  if (!tbody) return;
+  // Quitar filas en-memoria previas
+  Array.from(tbody.querySelectorAll('tr[data-mem]')).forEach(r => r.remove());
+  // Insertar al tope
+  [..._activityLog].reverse().forEach(item => {
+    const timeStr = new Date(item.ts).toLocaleString('es-CO');
+    const statusHtml = item.statusClass
+      ? `<span class="status-badge ${item.statusClass}">${item.statusClass === 's-green' ? 'Exitoso' : item.statusClass === 's-red' ? 'Error' : item.statusClass === 's-yellow' ? 'En proceso' : 'Aviso'}</span>`
+      : '<span style="color:var(--muted)">\u2014</span>';
+    const row = document.createElement('tr');
+    row.setAttribute('data-mem', '1');
+    row.innerHTML = `
+      <td><div class="act-icon"><svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg></div></td>
+      <td>${item.desc}</td>
+      <td style="color:var(--muted)">${item.tipo}</td>
+      <td style="color:var(--muted)"><time>${timeStr}</time></td>
+      <td>${statusHtml}</td>`;
+    tbody.insertBefore(row, tbody.firstChild);
+  });
+  // Mantener máx 20 filas totales
+  while (tbody.rows.length > 20) tbody.deleteRow(tbody.rows.length - 1);
+}
+
 
 async function _loadAdminOverview() {
   try {
@@ -1393,6 +1528,21 @@ async function _loadAdminOverview() {
       };
       overviewVisible.forEach(item => renderOverviewRow(item, false));
       overviewHidden.forEach(item  => renderOverviewRow(item, true));
+      // Detectar scraping automático reciente y añadirlo al log en memoria
+      const autoItems = logs.filter(h => !h.triggered_by_admin && 'query' in h);
+      autoItems.slice(0, 3).forEach(h => {
+        const key = `auto-${h.id || h.created_at}`;
+        if (!_activityLog.find(a => a._key === key)) {
+          const entry = { desc: `Scraping automático: ${h.query}`, tipo: 'Automático',
+            statusClass: h.status === 'done' ? 's-green' : h.status === 'error' ? 's-red' : 's-yellow',
+            ts: new Date(h.created_at).getTime(), _key: key };
+          _activityLog.push(entry);
+        }
+      });
+      _activityLog.sort((a, b) => b.ts - a.ts);
+      if (_activityLog.length > 20) _activityLog.length = 20;
+      // Inyectar eventos en-memoria (login, logout, scraping auto, etc.) al tope
+      _renderActivityLog(tbody);
       const existingOvBtn = document.getElementById('overview-ver-mas-btn');
       if (existingOvBtn) existingOvBtn.remove();
       if (overviewHidden.length > 0) {
@@ -1598,6 +1748,7 @@ async function rerunDemoScraping() {
   // Refrescar tabla inmediatamente para mostrar los nuevos items en "En proceso"
   setTimeout(() => _loadAdminScraping(), 1000);
   // Arrancar polling que actualiza la tabla y notifica cuando todo termina
+  _trackScrapingBatch(taskIds, 'demo');
   _startScrapingTablePolling(taskIds);
 }
 
