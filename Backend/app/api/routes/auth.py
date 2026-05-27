@@ -20,6 +20,14 @@ async def register(body: UserCreate, db: AsyncSession = Depends(get_db)):
             detail="Ya existe una cuenta con ese correo electrónico",
         )
 
+    is_first_admin = False
+    if body.role == UserRole.admin:
+        existing = await db.execute(
+            select(User).where(User.role == UserRole.admin, User.is_active == True)
+        )
+        if not existing.scalar_one_or_none():
+            is_first_admin = True
+
     user = User(
         name=body.name,
         email=body.email,
@@ -30,6 +38,12 @@ async def register(body: UserCreate, db: AsyncSession = Depends(get_db)):
     db.add(user)
     await db.commit()
     await db.refresh(user)
+
+    # Si es el primer admin, disparar scraping de productos predeterminados
+    if is_first_admin:
+        from app.workers.tasks import run_startup_demo_scraping
+        run_startup_demo_scraping.delay()
+
     return user
 
 
