@@ -82,7 +82,12 @@ async def scan(
     )
 
     await db.commit()
-    return ScanResponse(task_id=task_id, status=TaskStatus.pending, message=f"Buscando: {query}")
+    return ScanResponse(
+        task_id=task_id,
+        status=TaskStatus.pending,
+        message=f"Buscando: {query}",
+        vision=product_info,  # devolver atributos IA al frontend de inmediato
+    )
 
 
 @router.get("/results/{task_id}", response_model=TaskStatusResponse)

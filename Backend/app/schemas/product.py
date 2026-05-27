@@ -45,6 +45,7 @@ class ScanResponse(BaseModel):
     task_id: str
     status: TaskStatus
     message: str
+    vision: dict | None = None  # atributos IA devueltos de inmediato
 
 
 class TaskStatusResponse(BaseModel):

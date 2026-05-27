@@ -22,12 +22,24 @@ const Auth = {
   isLoggedIn() { return !!this.getAccess(); },
 };
 
-/* ── Fetch base con auth y refresh automático ─── */
+/* ── Fetch base con auth, timeout y refresh automático ─── */
 async function apiFetch(path, options = {}) {
   const headers = { 'Content-Type': 'application/json', ...options.headers };
   if (Auth.getAccess()) headers['Authorization'] = `Bearer ${Auth.getAccess()}`;
 
-  let res = await fetch(`${API_BASE}${path}`, { ...options, headers });
+  // Timeout 10s — si el backend no responde, falla limpiamente
+  const controller = new AbortController();
+  const timeoutId  = setTimeout(() => controller.abort(), 10000);
+
+  let res;
+  try {
+    res = await fetch(`${API_BASE}${path}`, { ...options, headers, signal: controller.signal });
+  } catch (err) {
+    clearTimeout(timeoutId);
+    if (err.name === 'AbortError') throw new Error('El servidor no responde (timeout). Verifica que el backend este corriendo en localhost:8000.');
+    throw new Error('Error de conexion. Verifica que el backend este activo.');
+  }
+  clearTimeout(timeoutId);
 
   // Si el token expiró, intenta refrescar una vez
   if (res.status === 401 && Auth.getRefresh()) {
@@ -117,11 +129,22 @@ const ApiScan = {
     const form = new FormData();
     form.append('file', file);
 
-    const res = await fetch(`${API_BASE}/scan`, {
-      method: 'POST',
-      headers: { 'Authorization': `Bearer ${Auth.getAccess()}` },
-      body: form,   // NO poner Content-Type aquí, fetch lo pone solo con boundary
-    });
+    const controller = new AbortController();
+    const timeoutId  = setTimeout(() => controller.abort(), 30000); // 30s para imagen+IA
+    let res;
+    try {
+      res = await fetch(`${API_BASE}/scan`, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${Auth.getAccess()}` },
+        body: form,
+        signal: controller.signal,
+      });
+    } catch (err) {
+      clearTimeout(timeoutId);
+      if (err.name === 'AbortError') throw new Error('Timeout al analizar imagen. El backend tarda demasiado.');
+      throw new Error('Error de conexion al enviar imagen.');
+    }
+    clearTimeout(timeoutId);
 
     if (!res.ok) {
       const err = await res.json().catch(() => ({ detail: 'Error al analizar imagen' }));
@@ -203,10 +226,10 @@ const ApiAdmin = {
   async getScrapingLogs(page = 1) {
     return apiFetch(`/admin/scraping/logs?page=${page}`);
   },
-  async triggerScraping() {
-    return apiFetch('/admin/scraping/trigger', { method: 'POST' });
-  },
   async getScrapingHistory(page = 1) {
     return apiFetch(`/admin/scraping/history?page=${page}`);
+  },
+  async triggerScraping() {
+    return apiFetch('/admin/scraping/trigger', { method: 'POST' });
   },
 };

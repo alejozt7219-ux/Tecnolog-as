@@ -37,10 +37,17 @@ document.addEventListener('DOMContentLoaded', async () => {
   // Auto-login si ya hay token guardado
   if (Auth.isLoggedIn()) {
     try {
-      console.log('Token guardado:', Auth.getAccess());
       currentUser = await ApiAuth.me();
-      console.log('Me response:', currentUser);
       _applyUserToUI(currentUser);
+      // Navegar a la pantalla correcta según el rol
+      if (currentUser.role === 'admin') {
+        showScreen('admin');
+        showAdminPage('overview');
+      } else {
+        showScreen('app');
+        showPage('dashboard');
+        _loadDashboard();
+      }
     } catch (_) {
       Auth.clear();
       showScreen('landing');
@@ -207,18 +214,20 @@ async function doLogin() {
     const isAdmin = currentUser.role === 'admin';
     if (isAdmin) {
       showScreen('admin');
-      showAdminPage('overview');
-      await _loadAdminOverview();
+      showAdminPage('overview');  // esto ya llama _loadAdminOverview internamente
       setTimeout(() => showToast('¡Acceso autorizado!', `Bienvenido, ${currentUser.name.split(' ')[0]}`), 400);
     } else {
       showScreen('app');
       showPage('dashboard');
-      await _loadDashboard();
+      _loadDashboard();  // sin await — no bloquear la navegación
       setTimeout(() => showToast('¡Bienvenido!', `Hola ${currentUser.name.split(' ')[0]} 👋`), 400);
     }
   } catch (err) {
     hideLoader();
-    showFieldError('email-input', 'email-error', err.message || 'Credenciales incorrectas');
+    // Volver a la pantalla de login para que el usuario pueda reintentar
+    showScreen('login');
+    const msg = err.message || 'Credenciales incorrectas';
+    showFieldError('email-input', 'email-error', msg);
     document.getElementById('email-input')?.focus();
   }
 }
@@ -282,12 +291,11 @@ async function doRegister() {
     if (isAdminUser) {
       showScreen('admin');
       showAdminPage('overview');
-      await _loadAdminOverview();
       setTimeout(() => showToast('¡Cuenta creada!', `Bienvenido, ${currentUser.name.split(' ')[0]} 👑`), 400);
     } else {
       showScreen('app');
       showPage('dashboard');
-      await _loadDashboard();
+      _loadDashboard();  // sin await
       setTimeout(() => showToast('¡Cuenta creada!', `Bienvenido a PriceVision, ${name.split(' ')[0]}`), 400);
     }
   } catch (err) {
@@ -349,6 +357,7 @@ function showPage(name) {
   const target = document.getElementById('page-' + name);
   if (target) target.classList.add('active');
   if (name !== 'results') fromHistory = false;
+  if (name === 'profile') _loadProfileStats();
 }
 
 function navToResults() {
@@ -366,7 +375,8 @@ function showAdminPage(name) {
   const target = document.getElementById('admin-page-' + name);
   if (target) target.classList.add('active');
 
-  // FIX: cargar datos reales al navegar a cada sección del admin
+  // Siempre recargar datos reales desde BD al navegar a cualquier sección
+  if (name === 'overview')  _loadAdminOverview();
   if (name === 'tiendas')   _loadAdminStores();
   if (name === 'usuarios')  _loadAdminUsers();
   if (name === 'scraping')  _loadAdminScraping();
@@ -770,6 +780,36 @@ function saveProfile() {
   showToast('Perfil actualizado', 'Cambios guardados correctamente');
 }
 
+async function _loadProfileStats() {
+  try {
+    const history = await ApiScan.getGlobalHistory(1, 100);
+    const doneItems = (history || []).filter(h => h.status === 'done');
+    const totalSearches = history?.length || 0;
+    // Oportunidades = búsquedas con más de 1 precio encontrado
+    const opportunities = doneItems.filter(h => (h.product?.prices?.length || 0) > 1).length;
+    // Ahorro estimado = suma de (precio_max - precio_min) de cada búsqueda con precios
+    let totalSaving = 0;
+    doneItems.forEach(h => {
+      const prices = h.product?.prices?.map(p => p.price) || [];
+      if (prices.length > 1) {
+        totalSaving += Math.max(...prices) - Math.min(...prices);
+      }
+    });
+    const savingStr = totalSaving >= 1000000
+      ? `$${(totalSaving/1000000).toFixed(1)}M`
+      : totalSaving >= 1000
+        ? `$${Math.round(totalSaving/1000)}k`
+        : `$${totalSaving.toLocaleString('es-CO')}`;
+
+    const statsVals = document.querySelectorAll('#page-profile .stats-row .val');
+    if (statsVals[0]) { statsVals[0].textContent = totalSearches; }
+    if (statsVals[1]) { statsVals[1].textContent = opportunities; }
+    if (statsVals[2]) { statsVals[2].textContent = savingStr || '$0'; }
+  } catch (_) {
+    // Si falla la API, dejar los valores que había
+  }
+}
+
 /* ═══════════════════ MODALS + FOCUS TRAP ═══════════════════ */
 function getFocusableElements(container) {
   return Array.from(container.querySelectorAll(
@@ -897,17 +937,55 @@ function _renderUsersTable(users) {
     `;
     tbody.appendChild(tr);
   });
+
+  // Actualizar las tarjetas de stats (antes hardcodeadas)
+  const total   = users.length;
+  const active  = users.filter(u => u.is_active).length;
+  const admins  = users.filter(u => u.role === 'admin').length;
+  const analysts = users.filter(u => u.role !== 'admin').length;
+  const statsCards = document.querySelectorAll('#admin-page-usuarios .stats-grid .stat-val');
+  if (statsCards[0]) statsCards[0].textContent = total;
+  if (statsCards[1]) statsCards[1].textContent = active;
+  if (statsCards[2]) statsCards[2].textContent = admins;
+  if (statsCards[3]) statsCards[3].textContent = analysts;
 }
 
 /* FIX: carga scraping logs reales */
 async function _loadAdminScraping() {
   try {
-    const logs = await ApiAdmin.getScrapingLogs(1);
-    if (logs?.length) _renderScrapingLogs(logs);
-    // Mostrar/ocultar botón reset según si hay scrapings manuales del admin
+    // Usar el historial real de búsquedas (SearchHistory) — persistente en BD
+    const history = await ApiAdmin.getScrapingHistory(1);
     const resetBtn = document.getElementById('btn-reset-demo');
     if (resetBtn) resetBtn.style.display = 'inline-flex';
+    if (history?.length) _renderScrapingHistory(history);
+    else {
+      // Si no hay historial real, intentar logs como fallback
+      const logs = await ApiAdmin.getScrapingLogs(1).catch(() => []);
+      if (logs?.length) _renderScrapingLogs(logs);
+    }
   } catch (_) {}
+}
+
+function _renderScrapingHistory(items) {
+  const tbody = document.getElementById('scraping-history-tbody');
+  if (!tbody) return;
+  tbody.innerHTML = '';
+  items.forEach(item => {
+    const tr = document.createElement('tr');
+    const sc = item.status === 'done' ? 's-green' : item.status === 'error' ? 's-red' : 's-yellow';
+    const st = item.status === 'done' ? 'Completado' : item.status === 'error' ? 'Error' : 'En proceso';
+    const dateStr = new Date(item.created_at).toLocaleString('es-CO');
+    const source = item.triggered_by_admin ? 'Admin manual' : 'Usuario';
+    tr.innerHTML = `
+      <td><time>${dateStr}</time></td>
+      <td><span class="status-badge ${sc}">${st}</span></td>
+      <td style="color:var(--muted);max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${item.query || '—'}</td>
+      <td>—</td>
+      <td style="color:var(--muted);font-size:11px">${source}</td>
+      <td><button class="link-btn" onclick="showToast('Búsqueda','${(item.query||'').replace(/'/g,"\\'")}')">Ver</button></td>
+    `;
+    tbody.appendChild(tr);
+  });
 }
 
 function _renderScrapingLogs(logs) {
@@ -956,18 +1034,29 @@ function _addRecentActivity(desc, tipo, statusClass) {
 
 async function _loadAdminOverview() {
   try {
-    const [data, logs] = await Promise.all([
-      ApiAdmin.getOverview(),
-      ApiAdmin.getScrapingLogs(1).catch(() => []),
+    // Timeout de seguridad: si el backend no responde en 8s, no bloquear la UI
+    const timeout = new Promise((_, rej) => setTimeout(() => rej(new Error('timeout')), 8000));
+
+    // Cargar overview y stores en paralelo — stores es la fuente de verdad para los conteos
+    const [data, logs, stores] = await Promise.race([
+      Promise.all([
+        ApiAdmin.getOverview(),
+        ApiAdmin.getScrapingHistory(1).catch(() => ApiAdmin.getScrapingLogs(1).catch(() => [])),
+        ApiAdmin.getStores().catch(() => null),
+      ]),
+      timeout.then(() => { throw new Error('timeout'); }),
     ]);
+
     countTo('acnt-products',  data.searches?.total    || 0, 1000);
     countTo('acnt-users',     data.users?.total        || 0, 1000);
-    countTo('acnt-stores',    data.stores?.active      || 0, 1000);
     countTo('acnt-completed', data.searches?.completed || 0, 1000);
 
-    // Cards del overview hardcodeados → ahora con datos reales
+    // Usar conteo REAL de tiendas (igual que Gestión de Tiendas)
+    const totalStores  = stores ? stores.length : (data.stores?.total  || 0);
+    const activeStores = stores ? stores.filter(s => s.is_active).length : (data.stores?.active || 0);
+
     const storesRatio = document.getElementById('acnt-stores-ratio');
-    if (storesRatio) storesRatio.textContent = `${data.stores?.active || 0}/${data.stores?.total || 0}`;
+    if (storesRatio) storesRatio.textContent = `${activeStores}/${totalStores}`;
 
     const lastExecCard = document.getElementById('acnt-last-exec');
     if (lastExecCard && data.scraping?.last_run) {
@@ -982,27 +1071,30 @@ async function _loadAdminOverview() {
     const errCard = document.getElementById('acnt-errors');
     if (errCard) errCard.textContent = data.scraping?.error_count ?? '—';
 
-    // last-execution-date en scraping también
     const lastExec = document.getElementById('last-execution-date');
     if (lastExec && data.scraping?.last_run) {
       lastExec.textContent = new Date(data.scraping.last_run).toLocaleDateString('es-CO');
     }
-    // Llenar tabla de actividad reciente con datos reales
+
+    // Tabla de actividad reciente — persistente desde BD
     const tbody = document.querySelector('#admin-page-overview .table-wrap tbody');
     if (tbody && logs?.length) {
       tbody.innerHTML = '';
-      logs.slice(0, 5).forEach(log => {
-        const sc = log.status === 'done' ? 's-green' : log.status === 'error' ? 's-red' : 's-yellow';
-        const st = log.status === 'done' ? 'Exitoso' : log.status === 'error' ? 'Error' : 'En proceso';
-        const desc = log.query
-          ? `Scraping manual: ${log.query}`
+      logs.slice(0, 10).forEach(item => {
+        // Soporte tanto para ScrapingLog como SearchHistory
+        const isHistory = 'query' in item;
+        const sc = (isHistory ? item.status === 'done' : item.status === 'success') ? 's-green'
+                 : (item.status === 'error') ? 's-red' : 's-yellow';
+        const st = sc === 's-green' ? 'Exitoso' : sc === 's-red' ? 'Error' : 'En proceso';
+        const desc = isHistory
+          ? (item.triggered_by_admin ? `Scraping manual: ${item.query}` : `Búsqueda usuario: ${item.query}`)
           : `Scraping automático completado`;
-        const dateStr = new Date(log.created_at).toLocaleString('es-CO');
+        const dateStr = new Date(item.created_at).toLocaleString('es-CO');
         tbody.insertAdjacentHTML('beforeend', `
           <tr>
             <td><div class="act-icon" aria-hidden="true"><svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg></div></td>
             <td>${desc}</td>
-            <td style="color:var(--muted)">Scraping</td>
+            <td style="color:var(--muted)">${isHistory ? (item.triggered_by_admin ? 'Admin' : 'Usuario') : 'Scraping'}</td>
             <td style="color:var(--muted)"><time>${dateStr}</time></td>
             <td><span class="status-badge ${sc}">${st}</span></td>
           </tr>`);
@@ -1078,7 +1170,7 @@ async function toggleStore(el, name) {
     // Persistir estado en el dataset para que al recargar quede correcto
     row.dataset.active = on ? 'true' : 'false';
     updateStoreCounts();
-    // Actualizar card de tiendas activas en overview
+    // Actualizar card de tiendas activas en overview usando la lista real
     const stores = await ApiAdmin.getStores().catch(() => null);
     if (stores) {
       const activeCount = stores.filter(s => s.is_active).length;
@@ -1577,23 +1669,30 @@ window.analyzePrice = async function() {
   _setProgressStep('step-compare', '');
 
   try {
-    /* ── Paso 1: subir imagen ── */
-    const { task_id } = await ApiScan.scanImage(currentFile);
+    /* ── Paso 1: subir imagen — la IA identifica el producto ── */
+    const scanResp = await ApiScan.scanImage(currentFile);
+    const { task_id } = scanResp;
     currentTaskId = task_id;
 
     _setProgressStep('step-vision', 'done');
     _setProgressStep('step-search', 'active');
 
-    /* ── Paso 2: polling ── */
+    // Mostrar atributos IA de inmediato (vienen en la respuesta del /scan)
+    if (scanResp.vision) {
+      const visionProduct = {
+        name: scanResp.vision.name,
+        category: scanResp.vision.category,
+        brand: scanResp.vision.brand,
+      };
+      _renderAttrsCard(visionProduct);
+    }
+
+    /* ── Paso 2: polling mientras se hace scraping ── */
     const result = await ApiScan.pollResults(task_id, {
       onProgress: (status) => {
         if (status === 'processing') {
           _setProgressStep('step-search',  'done');
           _setProgressStep('step-compare', 'active');
-          // Mostrar atributos tan pronto como lleguen (si el backend los devuelve en processing)
-          if (result?.product && !document.getElementById('attrs-card')?.style.display !== 'none') {
-            _renderAttrsCard(result.product);
-          }
         }
       },
     });
@@ -1601,7 +1700,7 @@ window.analyzePrice = async function() {
     _setProgressStep('step-search',  'done');
     _setProgressStep('step-compare', 'done');
 
-    /* ── Atributos reales ── */
+    /* ── Atributos reales del producto final (actualiza la tarjeta si ya estaba visible) ── */
     if (result.product) _renderAttrsCard(result.product);
 
     /* ── Guardar estado global ── */
