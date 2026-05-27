@@ -628,12 +628,75 @@ async function _triggerDemoSearches() {
 async function _refreshDashboardIfReady() {
   try {
     const history = await ApiScan.getGlobalHistory(1, 10);
-    const done = (history || []).filter(h => h.product && h.status === 'done');
-    if (done.length) {
+
+    console.log('Historial recibido:', history);
+
+    // Estados válidos de finalización
+    const completedStates = ['done', 'success', 'completed'];
+
+    // Filtrar solo productos terminados
+    const done =
+      history?.filter(
+        h =>
+          h.product &&
+          completedStates.includes(
+            String(h.status || '').toLowerCase()
+          )
+      ) || [];
+
+    console.log('Productos completados:', done);
+
+    // =========================
+    // SI HAY HISTORIAL REAL
+    // =========================
+    if (done.length > 0) {
+
+      // Renderizar historial real
       _renderDashboardHistory(done.slice(0, 5));
+
+      // Actualizar contador
       countTo('cnt-products', done.length, 400);
+
+      // Guardar cache local
+      localStorage.setItem(
+        'pv-dashboard-history',
+        JSON.stringify(done)
+      );
+
+      return;
     }
-  } catch (_) {}
+
+    // =========================
+    // FALLBACK A CACHE / DEMO
+    // =========================
+    console.warn('No hay historial terminado. Usando cache demo.');
+
+    _renderDashboardFromCache();
+
+    countTo(
+      'cnt-products',
+      Object.keys(CACHED_PRICES || {}).length,
+      400
+    );
+
+  } catch (err) {
+
+    console.error(
+      'Error refrescando dashboard:',
+      err
+    );
+
+    // =========================
+    // FALLBACK SI TODO FALLA
+    // =========================
+    _renderDashboardFromCache();
+
+    countTo(
+      'cnt-products',
+      Object.keys(CACHED_PRICES || {}).length,
+      400
+    );
+  }
 }
 
 function _renderDashboardFromCache() {
