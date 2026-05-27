@@ -2339,3 +2339,51 @@ tbody tr:hover { background: var(--bg3); }
   background: rgba(34,217,142,0.25);
   transform: translateX(2px);
 }
+/* Custom time picker */
+.custom-time-picker {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: var(--bg3);
+  border: 1px solid var(--border2);
+  border-radius: 10px;
+  padding: 6px 10px;
+  transition: border-color .2s;
+}
+.custom-time-picker:focus-within { border-color: var(--accent); }
+.ctp-col {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+}
+.ctp-arrow {
+  background: none;
+  border: none;
+  color: var(--muted);
+  font-size: 9px;
+  line-height: 1;
+  padding: 2px 6px;
+  cursor: pointer;
+  border-radius: 4px;
+  transition: color .15s, background .15s;
+}
+.ctp-arrow:hover { color: var(--accent); background: rgba(124,111,255,.12); }
+.ctp-val {
+  font-family: var(--font-head, 'Space Grotesk', sans-serif);
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--text);
+  min-width: 30px;
+  text-align: center;
+  line-height: 1;
+  padding: 2px 0;
+}
+.ctp-ampm { font-size: 13px; min-width: 28px; color: var(--accent); }
+.ctp-sep {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--muted);
+  padding: 0 2px;
+  margin-top: -4px;
+}

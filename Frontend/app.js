@@ -51,7 +51,17 @@ async function _scrapingNotifPoller() {
       const cutoff = Date.now() - 10 * 60 * 1000;
       const recent = history.filter(h => new Date(h.created_at).getTime() > cutoff);
 
-      // Notificar completados individualmente
+      // Refrescar UI en vivo en cada tick (actualiza tablas y stat cards sin importar en qué sección estés)
+      _updateScrapingStatCards(history);
+      const currentAdminPage = document.querySelector('.admin-page.active')?.id;
+      if (currentAdminPage === 'admin-page-scraping') {
+        _renderScrapingHistory(history);
+      } else if (currentAdminPage === 'admin-page-overview') {
+        // Re-renderizar actividad reciente con datos frescos
+        const tbody = document.querySelector('#admin-page-overview .table-wrap tbody');
+        if (tbody) _renderActivityLog(tbody);
+      }
+
       for (const h of recent) {
         if (_notifiedTaskIds.has(h.task_id)) continue;
         const isDone  = h.status === 'done';
@@ -62,20 +72,29 @@ async function _scrapingNotifPoller() {
 
         const productName = h.query || h.product?.name || 'Producto';
         const isAuto = !h.triggered_by_admin;
-        const label  = isAuto ? '🤖 Scraping automático' : '🔍 Scraping';
+        const isBatchItem = _pendingBatchIds.has(h.task_id);
 
+        // Solo toast individual si NO es parte de un batch
+        if (!isBatchItem) {
+          const label = isAuto ? '🤖 Scraping automático' : '🔍 Scraping';
+          if (isDone) {
+            const priceCount = h.product?.prices?.length || 0;
+            showToast(
+              `${label}: ${productName}`,
+              `✅ Completado${priceCount ? ` · ${priceCount} precios encontrados` : ''}`
+            );
+          } else {
+            showToast(`${label}: ${productName}`, '❌ Falló el scraping', true);
+          }
+        }
+
+        // Actividad reciente siempre
         if (isDone) {
-          const priceCount = h.product?.prices?.length || 0;
-          showToast(
-            `${label}: ${productName}`,
-            `✅ Completado${priceCount ? ` · ${priceCount} precios encontrados` : ''}`
-          );
           _addRecentActivity(
             `${isAuto ? 'Scraping automático' : 'Scraping'}: ${productName}`,
             isAuto ? 'Automático' : 'Admin', 's-green'
           );
         } else {
-          showToast(`${label}: ${productName}`, '❌ Falló el scraping', true);
           _addRecentActivity(
             `Error scraping: ${productName}`,
             isAuto ? 'Automático' : 'Admin', 's-red'
@@ -83,12 +102,12 @@ async function _scrapingNotifPoller() {
         }
 
         // Si estaba en un batch, contar progreso
-        if (_pendingBatchIds.has(h.task_id)) {
+        if (isBatchItem) {
           _pendingBatchDone++;
           if (isError) _pendingBatchErrors++;
           _pendingBatchIds.delete(h.task_id);
 
-          // Cuando termina el batch completo → toast de resumen
+          // Cuando termina el batch completo → UN solo toast de resumen
           if (_pendingBatchIds.size === 0 && _pendingBatchTotal > 0) {
             const ok  = _pendingBatchDone - _pendingBatchErrors;
             const tag = _pendingBatchLabel === 'auto' ? '🤖 Scraping automático' : '🔄 Re-scraping';
@@ -1257,11 +1276,12 @@ function openScheduleEditor() {
   document.getElementById('schedule-display').style.display = 'none';
   document.getElementById('schedule-editor').style.display  = 'block';
   document.getElementById('sched-freq')?.focus();
+  _ctpRender();
 }
 
 function closeScheduleEditor() {
   document.getElementById('schedule-editor').style.display  = 'none';
-  document.getElementById('schedule-display').style.display = 'flex';
+  document.getElementById('schedule-display').style.display = 'block';
 }
 
 async function saveSchedule() {
@@ -1713,9 +1733,7 @@ function _startScrapingTablePolling(taskIds, attempt = 0) {
         // Todavía hay tasks en proceso — seguir polling
         _startScrapingTablePolling(taskIds, attempt + 1);
       } else {
-        // Todos terminaron — toast final y actualizar dashboard
-        showToast('Re-scraping completado', 'Todos los productos predeterminados actualizados ✅');
-        _addRecentActivity('Re-scraping de predeterminados completado', 'Admin', 's-green');
+        // Todos terminaron — el poller de notifs ya lanza el toast de resumen, solo refrescamos el dashboard
         if (_dashboardPollTimer) { clearTimeout(_dashboardPollTimer); _dashboardPollTimer = null; }
         _startDashboardPolling(0);
       }
@@ -2946,3 +2964,42 @@ window.openScrapingResultModal = function(btn) {
 
   openModal('modal-scraping-result');
 };
+/* ── Custom Time Picker (CTP) ─────────────────────── */
+(function initCTP() {
+  // Initialize from current sched-time value
+  const inp = document.getElementById('sched-time');
+  if (!inp) return;
+  const [h, m] = (inp.value || '08:30').split(':').map(Number);
+  window._ctpH = h % 12 || 12;
+  window._ctpM = m;
+  window._ctpPm = h >= 12;
+  _ctpRender();
+})();
+
+function _ctpRender() {
+  const hEl = document.getElementById('ctp-h');
+  const mEl = document.getElementById('ctp-m');
+  const aEl = document.getElementById('ctp-ampm');
+  if (!hEl) return;
+  hEl.textContent = String(window._ctpH).padStart(2, '0');
+  mEl.textContent = String(window._ctpM).padStart(2, '0');
+  aEl.textContent = window._ctpPm ? 'PM' : 'AM';
+  // sync hidden input (24h)
+  const h24 = window._ctpPm ? (window._ctpH === 12 ? 12 : window._ctpH + 12) : (window._ctpH === 12 ? 0 : window._ctpH);
+  const inp = document.getElementById('sched-time');
+  if (inp) inp.value = `${String(h24).padStart(2,'0')}:${String(window._ctpM).padStart(2,'0')}`;
+}
+
+function ctpStep(unit, dir) {
+  if (unit === 'h') {
+    window._ctpH = ((window._ctpH - 1 + dir + 12) % 12) + 1;
+  } else {
+    window._ctpM = (window._ctpM + dir * 5 + 60) % 60;
+  }
+  _ctpRender();
+}
+
+function ctpToggleAmPm() {
+  window._ctpPm = !window._ctpPm;
+  _ctpRender();
+}
