@@ -590,7 +590,7 @@ function _startDashboardPolling(attempt = 0) {
       );
       if (done.length > 0) {
         // ¡Llegaron resultados reales! Actualizar dashboard.
-        _renderDashboardHistory(done.slice(0, 5));
+        _renderDashboardHistory(_mergeDashboardHistory(done));
         countTo('cnt-products', done.length, 400);
         localStorage.setItem('pv-dashboard-history', JSON.stringify(done));
       } else {
@@ -608,7 +608,7 @@ async function _loadDashboard() {
   if (_dashboardPollTimer) { clearTimeout(_dashboardPollTimer); _dashboardPollTimer = null; }
   try {
     // getGlobalHistory: propias del usuario + scrapings manuales del admin (visibles a todos)
-    const history = await ApiScan.getGlobalHistory(1, 10);
+    const history = await ApiScan.getGlobalHistory(1, 30);
     if (history?.length) {
       // Filtrar solo las que tienen producto asociado (status done)
       const completedStates = ['done', 'success', 'completed'];
@@ -616,7 +616,7 @@ async function _loadDashboard() {
         h => h.product && completedStates.includes(String(h.status || '').toLowerCase())
       );
       if (done.length) {
-        _renderDashboardHistory(done.slice(0, 5));
+        _renderDashboardHistory(_mergeDashboardHistory(done));
         countTo('cnt-products', done.length, 800);
       } else {
         // Hay historial pero los scrapers aún no terminan — mostrar cache
@@ -665,6 +665,39 @@ async function _triggerDemoSearches() {
   setTimeout(() => _refreshDashboardIfReady(), 15000);
 }
 
+/* Mezcla inteligente: primero búsquedas del usuario, luego predeterminados del admin para rellenar */
+function _mergeDashboardHistory(items, maxRows = 10) {
+  // Deduplicar por nombre de producto — quedarse solo con la entrada más reciente de cada uno
+  // (items ya viene ordenado por created_at desc desde el backend)
+  const seenNames = new Set();
+  const deduped = [];
+  for (const h of items) {
+    const name = (h.product?.name || h.query || '').toLowerCase().trim();
+    if (!seenNames.has(name)) {
+      seenNames.add(name);
+      deduped.push(h);
+    }
+  }
+  // Separar búsquedas del usuario y predeterminados del admin
+  const userItems  = deduped.filter(h => !h.triggered_by_admin);
+  const adminItems = deduped.filter(h =>  h.triggered_by_admin);
+
+  // SIEMPRE primero las del usuario (todas, hasta maxRows)
+  // luego rellenar con predeterminados del admin si sobran filas
+  const merged = [...userItems.slice(0, maxRows)];
+  const usedNames = new Set(merged.map(h => (h.product?.name || h.query || '').toLowerCase().trim()));
+
+  for (const a of adminItems) {
+    if (merged.length >= maxRows) break;
+    const name = (a.product?.name || a.query || '').toLowerCase().trim();
+    if (!usedNames.has(name)) {
+      merged.push(a);
+      usedNames.add(name);
+    }
+  }
+  return merged;
+}
+
 /* Refresca el dashboard solo si ya hay resultados completados */
 async function _refreshDashboardIfReady() {
   try {
@@ -693,7 +726,7 @@ async function _refreshDashboardIfReady() {
     if (done.length > 0) {
 
       // Renderizar historial real
-      _renderDashboardHistory(done.slice(0, 5));
+      _renderDashboardHistory(_mergeDashboardHistory(done));
 
       // Actualizar contador
       countTo('cnt-products', done.length, 400);
@@ -764,20 +797,21 @@ function _renderDashboardFromCache() {
   });
 }
 
-/* FIX: actualiza la tabla de búsquedas recientes del dashboard con datos reales */
+/* Actualiza la tabla de búsquedas recientes del dashboard — 5 visibles + "Ver más" hasta 10 */
 function _renderDashboardHistory(items) {
-  // La tabla del dashboard tiene un <tbody> dentro de .table-wrap
   const tableWrap = document.querySelector('#page-dashboard .table-wrap');
   if (!tableWrap) return;
   const tbody = tableWrap.querySelector('tbody');
   if (!tbody) return;
-
   tbody.innerHTML = '';
 
-  // Renderizar resultados reales (los más recientes primero)
-  const realNames = new Set();
-  items.forEach(item => {
+  const VISIBLE = 5;
+  const visible = items.slice(0, VISIBLE);
+  const hidden  = items.slice(VISIBLE, 10);
+
+  function makeRow(item, isHidden) {
     const tr = document.createElement('tr');
+    if (isHidden) { tr.className = 'dashboard-extra'; tr.style.display = 'none'; }
     const date = new Date(item.created_at);
     const dateStr = date.toLocaleDateString('es-CO');
     const timeStr = date.toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' });
@@ -786,19 +820,43 @@ function _renderDashboardHistory(items) {
       : '—';
     const storeCount = item.product?.prices?.length || '—';
     const productName = item.product?.name || item.query;
-    realNames.add(productName.toLowerCase());
-
+    const tag = item.triggered_by_admin
+      ? '<span style="font-size:10px;color:var(--muted);margin-left:6px;opacity:.7">predeterminado</span>'
+      : '';
     tr.innerHTML = `
-      <td>${productName}</td>
+      <td>${productName}${tag}</td>
       <td><time datetime="${date.toISOString()}">${dateStr} ${timeStr}</time></td>
       <td class="price-val">${bestPrice}</td>
       <td>${storeCount} tienda${storeCount !== 1 ? 's' : ''}</td>
       <td><button class="link-btn" onclick="goResultsFromHistory(${JSON.stringify(item.product?.prices || []).replace(/"/g, '&quot;')}, '${productName.replace(/'/g, "\\'")}')">Ver Detalles</button></td>
     `;
     tbody.appendChild(tr);
-  });
-  // NO rellenar con demo data: si hay resultados reales solo mostrarlos.
-  // El dashboard con datos reales nunca debe mezclar con CACHED_PRICES.
+  }
+
+  visible.forEach(item => makeRow(item, false));
+  hidden.forEach(item  => makeRow(item, true));
+
+  // Botón "Ver más / Ver menos"
+  const existingBtn = document.getElementById('dashboard-ver-mas-btn');
+  if (existingBtn) existingBtn.remove();
+
+  if (hidden.length > 0) {
+    const btnRow = document.createElement('tr');
+    btnRow.id = 'dashboard-ver-mas-btn';
+    btnRow.innerHTML = `<td colspan="5" style="text-align:center;padding:10px 0">
+      <button class="link-btn" id="btn-ver-mas-dashboard"
+        style="font-size:12px;padding:5px 16px;border:1px solid var(--border);border-radius:6px;color:var(--muted)">
+        Ver más (${hidden.length})
+      </button>
+    </td>`;
+    tbody.appendChild(btnRow);
+    document.getElementById('btn-ver-mas-dashboard').addEventListener('click', function() {
+      const extras  = document.querySelectorAll('#page-dashboard .dashboard-extra');
+      const showing = extras[0] && extras[0].style.display !== 'none';
+      extras.forEach(r => r.style.display = showing ? 'none' : '');
+      this.textContent = showing ? `Ver más (${hidden.length})` : 'Ver menos';
+    });
+  }
 }
 
 /* Muestra resultados de un ítem del historial */
@@ -1332,6 +1390,38 @@ async function toggleUser(el, name) {
 }
 
 /* ── Re-scraping de productos predeterminados ─────── */
+// Polling de la tabla de scraping admin hasta que todos los tasks terminen
+let _scrapingTablePollTimer = null;
+function _startScrapingTablePolling(taskIds, attempt = 0) {
+  if (_scrapingTablePollTimer) { clearTimeout(_scrapingTablePollTimer); _scrapingTablePollTimer = null; }
+  if (attempt > 30 || !taskIds.length) return; // máx ~2min
+  const delay = Math.min(3000 + attempt * 1000, 8000);
+  _scrapingTablePollTimer = setTimeout(async () => {
+    _scrapingTablePollTimer = null;
+    try {
+      // Revisar cuántos de los tasks ya terminaron
+      const checks = await Promise.allSettled(taskIds.map(id => apiFetch('/results/' + id)));
+      const pending = checks.filter(r =>
+        r.status === 'fulfilled' && !['done','error'].includes(r.value?.status)
+      );
+      // Refrescar la tabla siempre (muestra progreso)
+      await _loadAdminScraping();
+      if (pending.length > 0) {
+        // Todavía hay tasks en proceso — seguir polling
+        _startScrapingTablePolling(taskIds, attempt + 1);
+      } else {
+        // Todos terminaron — toast final y actualizar dashboard
+        showToast('Re-scraping completado', 'Todos los productos predeterminados actualizados ✅');
+        _addRecentActivity('Re-scraping de predeterminados completado', 'Admin', 's-green');
+        if (_dashboardPollTimer) { clearTimeout(_dashboardPollTimer); _dashboardPollTimer = null; }
+        _startDashboardPolling(0);
+      }
+    } catch (_) {
+      _startScrapingTablePolling(taskIds, attempt + 1);
+    }
+  }, delay);
+}
+
 async function rerunDemoScraping() {
   showLoader('Re-scrapeando productos predeterminados…');
   const DEMO_QUERIES = [
@@ -1341,23 +1431,21 @@ async function rerunDemoScraping() {
     'Samsung Galaxy Watch6',
     'Cafetera Nespresso',
   ];
-  // Lanzar uno por uno con pequeño delay entre cada uno para evitar
-  // que el backend rechace requests simultáneos
-  let ok = 0;
+  const taskIds = [];
   for (const q of DEMO_QUERIES) {
     try {
-      const res = await ApiScan.searchByText(q);
-      if (res?.task_id) ok++;
-    } catch (_) { /* ignorar errores individuales y continuar */ }
+      const res = await ApiAdmin.triggerScraping(q);
+      if (res?.task_id) taskIds.push(res.task_id);
+    } catch (_) {}
     await new Promise(r => setTimeout(r, 400));
   }
   hideLoader();
-  showToast('Re-scraping iniciado', ok + '/' + DEMO_QUERIES.length + ' productos encolados 🔄');
+  showToast('Re-scraping iniciado', taskIds.length + '/' + DEMO_QUERIES.length + ' productos encolados 🔄');
   _addRecentActivity('Re-scraping de productos predeterminados', 'Admin', 's-yellow');
-  setTimeout(() => _loadAdminScraping(), 3000);
-  // Activar polling del dashboard para cuando terminen
-  if (_dashboardPollTimer) { clearTimeout(_dashboardPollTimer); _dashboardPollTimer = null; }
-  _startDashboardPolling(0);
+  // Refrescar tabla inmediatamente para mostrar los nuevos items en "En proceso"
+  setTimeout(() => _loadAdminScraping(), 1000);
+  // Arrancar polling que actualiza la tabla y notifica cuando todo termina
+  _startScrapingTablePolling(taskIds);
 }
 
 /* ── Admin: scraping manual REAL ─────────────────── */
@@ -1441,7 +1529,7 @@ async function _pollDashboardUpdate(taskId, attempts = 0) {
       // Recargar historial global — incluye el scraping del admin recién terminado
       const history = await ApiScan.getGlobalHistory(1, 10);
       const done = history?.filter(h => h.product && h.status === 'done') || [];
-      if (done.length) _renderDashboardHistory(done.slice(0, 5));
+      if (done.length) _renderDashboardHistory(_mergeDashboardHistory(done));
       showToast('¡Listo!', `Precios de "${result.product?.name || taskId}" actualizados 🎉`);
       return;
     }
@@ -1888,7 +1976,7 @@ window.analyzePrice = async function() {
       try {
         const hist = await ApiScan.getGlobalHistory(1, 10);
         const done = hist?.filter(h => h.product && h.status === 'done') || [];
-        if (done.length) _renderDashboardHistory(done.slice(0, 5));
+        if (done.length) _renderDashboardHistory(_mergeDashboardHistory(done));
       } catch (_) {}
     }, 1500);
 
@@ -2208,7 +2296,7 @@ window.showScreen = function showScreenExtended(id) {
           h => h.product && completedStates.includes(String(h.status || '').toLowerCase())
         );
         if (done.length) {
-          _renderDashboardHistory(done.slice(0, 5));
+          _renderDashboardHistory(_mergeDashboardHistory(done));
           countTo('cnt-products', done.length, 800);
         } else {
           _renderDashboardFromCache();
@@ -2407,7 +2495,7 @@ window.runScraping = async function() {
       try {
         const hist = await ApiScan.getGlobalHistory(1, 10);
         const done = hist?.filter(h => h.product && h.status === 'done') || [];
-        if (done.length) _renderDashboardHistory(done.slice(0, 5));
+        if (done.length) _renderDashboardHistory(_mergeDashboardHistory(done));
       } catch (_) {}
       // Si es admin, refrescar también la tabla de historial del panel admin
       if (currentUser?.role === 'admin') {

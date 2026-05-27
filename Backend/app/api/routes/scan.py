@@ -180,8 +180,14 @@ async def get_global_history(
     - Scrapings manuales del admin (triggered_by_admin=True), visibles para todos
     Ordenado por fecha descendente sin duplicados.
     """
-    from sqlalchemy import or_
+    from sqlalchemy import or_, case
     offset = (page - 1) * limit
+    # Ordenar: primero las búsquedas propias del usuario, luego las del admin
+    # Dentro de cada grupo, por fecha descendente
+    user_first = case(
+        (SearchHistory.user_id == current_user.id, 0),
+        else_=1,
+    )
     result = await db.execute(
         select(SearchHistory)
         .where(
@@ -195,7 +201,7 @@ async def get_global_history(
             .selectinload(Product.prices)
             .selectinload(PriceResult.store)
         )
-        .order_by(SearchHistory.created_at.desc())
+        .order_by(user_first, SearchHistory.created_at.desc())
         .offset(offset)
         .limit(limit)
     )
