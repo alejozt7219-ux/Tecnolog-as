@@ -1,13 +1,20 @@
 """
-Amazon Colombia — scraper Playwright con selectores reales (2025).
-El precio en amazon.com.co aparece como "COP 1,548,363" dentro de
-span.a-price-whole (sin símbolo $, con comas como separador de miles).
-Selectores extraídos del HTML real inspeccionado.
+Amazon Colombia — scraper Playwright (2025).
+Amazon detecta Playwright por propiedades del navegador (navigator.webdriver=true).
+Usamos init_script para ocultarlo + user-agent realista.
 """
 from app.scraper.base import BaseScraper, ScrapedPrice
 import logging
 
 logger = logging.getLogger(__name__)
+
+# Script para ocultar señales de automatización
+_STEALTH_JS = """
+Object.defineProperty(navigator, 'webdriver', { get: () => undefined });
+Object.defineProperty(navigator, 'plugins', { get: () => [1,2,3,4,5] });
+Object.defineProperty(navigator, 'languages', { get: () => ['es-CO','es','en'] });
+window.chrome = { runtime: {} };
+"""
 
 
 class AmazonScraper(BaseScraper):
@@ -15,20 +22,52 @@ class AmazonScraper(BaseScraper):
     base_url   = "https://www.amazon.com.co"
 
     async def search(self, query: str) -> list[ScrapedPrice]:
-        page = await self.new_page()
+        # Crear contexto con stealth
+        context = await self.browser.new_context(
+            user_agent=(
+                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                "AppleWebKit/537.36 (KHTML, like Gecko) "
+                "Chrome/124.0.6367.82 Safari/537.36"
+            ),
+            viewport={"width": 1366, "height": 768},
+            locale="es-CO",
+            timezone_id="America/Bogota",
+            java_script_enabled=True,
+            extra_http_headers={
+                "Accept-Language": "es-CO,es;q=0.9,en-US;q=0.8,en;q=0.7",
+                "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
+                "sec-ch-ua": '"Chromium";v="124", "Google Chrome";v="124"',
+                "sec-ch-ua-platform": '"Windows"',
+            },
+        )
+        await context.add_init_script(_STEALTH_JS)
+        page = await context.new_page()
+
+        # Bloquear recursos innecesarios
+        await page.route(
+            "**/*.{png,jpg,jpeg,gif,svg,woff,woff2,ico}",
+            lambda route: route.abort(),
+        )
+
         results = []
 
         try:
             search_url = f"{self.base_url}/s?k={query.replace(' ', '+')}&language=es_CO"
-            await page.goto(search_url, timeout=self._timeout())
+            await page.goto(search_url, wait_until="domcontentloaded", timeout=self._timeout())
 
             try:
                 await page.wait_for_selector(
                     "[data-component-type='s-search-result']",
-                    timeout=15000,
+                    timeout=20000,
                 )
             except Exception:
-                logger.warning(f"[Amazon CO] Sin resultados para '{query}'")
+                content = await page.content()
+                if "captcha" in content.lower() or "robot" in content.lower():
+                    logger.warning(f"[Amazon CO] CAPTCHA detectado para '{query}'")
+                elif "sorry" in content.lower():
+                    logger.warning(f"[Amazon CO] Bloqueado (sorry page) para '{query}'")
+                else:
+                    logger.warning(f"[Amazon CO] Sin resultados para '{query}'")
                 return results
 
             items = await page.query_selector_all(
@@ -41,45 +80,39 @@ class AmazonScraper(BaseScraper):
                     if not asin:
                         continue
 
-                    # Título — h2 > a > span o h2 con clase a-size-medium
                     title_el = (
                         await item.query_selector("h2 .a-size-medium.a-color-base.a-text-normal") or
                         await item.query_selector("h2 a span") or
                         await item.query_selector("h2 span")
                     )
-
-                    # Precio: amazon.com.co usa "COP 1,548,363" en a-price-whole
-                    # El span.a-offscreen tiene el precio limpio: "COP 1,548,363"
-                    price_offscreen = await item.query_selector(
-                        ".a-price .a-offscreen"
-                    )
-                    # Fallback: a-price-whole directamente
-                    price_whole_el = await item.query_selector(".a-price-whole")
-
                     if not title_el:
                         continue
 
                     title = (await title_el.inner_text()).strip()
 
+                    # Precio: .a-price .a-offscreen = "COP 1,548,363"
                     price = None
-
-                    # Intentar primero el offscreen que tiene el valor completo
+                    price_offscreen = await item.query_selector(".a-price .a-offscreen")
                     if price_offscreen:
                         raw = (await price_offscreen.inner_text()).strip()
-                        # "COP 1,548,363" o "COP\xa01,548,363"
-                        # Quitar "COP", espacios, comas
-                        clean = raw.replace("COP", "").replace(",", "").replace(".", "").strip()
-                        # puede quedar "1548363"
-                        digits = "".join(c for c in clean if c.isdigit())
-                        if digits:
-                            price = float(digits)
+                        # Amazon CO: "COP 72,431.40" — comas=miles, punto=decimales
+                        # Eliminar símbolo, espacios, no-break spaces
+                        clean = raw.replace("COP", "").replace("\xa0", "").replace(" ", "").strip()
+                        # Quitar comas (separador de miles) pero conservar el punto decimal
+                        clean = clean.replace(",", "")
+                        try:
+                            price = float(clean)  # "72431.40" → 72431.40
+                        except ValueError:
+                            pass
 
-                    # Fallback: a-price-whole (puede venir "1,548,363" o "1548363")
-                    if not price and price_whole_el:
-                        raw = (await price_whole_el.inner_text()).strip()
-                        digits = "".join(c for c in raw if c.isdigit())
-                        if digits:
-                            price = float(digits)
+                    if not price:
+                        price_whole_el = await item.query_selector(".a-price-whole")
+                        if price_whole_el:
+                            raw = (await price_whole_el.inner_text()).strip()
+                            # a-price-whole no tiene decimales, solo dígitos y comas/puntos de miles
+                            clean = raw.replace(",", "").replace(".", "").strip()
+                            if clean.isdigit():
+                                price = float(clean)
 
                     if not price or price < 10_000 or price > 50_000_000:
                         continue
@@ -89,7 +122,7 @@ class AmazonScraper(BaseScraper):
                         await item.query_selector("a.a-link-normal[href*='/dp/']")
                     )
                     href = await link_el.get_attribute("href") if link_el else ""
-                    url  = f"{self.base_url}{href}" if href and href.startswith("/") else href
+                    url = f"{self.base_url}{href}" if href and href.startswith("/") else href
 
                     results.append(
                         ScrapedPrice(
@@ -109,6 +142,7 @@ class AmazonScraper(BaseScraper):
             logger.error(f"[Amazon CO] Error en búsqueda '{query}': {e}")
         finally:
             await page.close()
+            await context.close()
 
         return results
 

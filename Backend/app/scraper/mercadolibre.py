@@ -1,13 +1,30 @@
 """
-MercadoLibre Colombia — scraper Playwright con selectores poly-card (2025).
-La API pública bloquea requests desde servidores (403). Playwright simula
-un navegador real y evita el bloqueo.
-Selectores extraídos del HTML real inspeccionado por el usuario.
+MercadoLibre Colombia — scraper Playwright (2025).
+URL correcta: https://listado.mercadolibre.com.co/<query-con-guiones>
+Selectores poly-card verificados en HTML real.
 """
 from app.scraper.base import BaseScraper, ScrapedPrice
 import logging
 
 logger = logging.getLogger(__name__)
+
+
+def _clean_meli_url(url: str) -> str:
+    """
+    MeLi genera URLs de tracking enormes (click1.mercadolibre.com.co/mclics/...).
+    Las limpiamos para quedarnos solo con la URL canónica del producto.
+    """
+    if not url:
+        return url
+    # Quitar fragment con parámetros de tracking (#polycard_client=...)
+    if "#" in url:
+        url = url.split("#")[0]
+    # URLs de click-tracking: intentar extraer pdp_url del query string
+    if "mclics" in url or "click1.mercadolibre" in url:
+        # Tomar solo el dominio + path, sin query params
+        url = url.split("?")[0]
+    # Truncar por seguridad a 2000 chars
+    return url[:2000]
 
 
 class MercadoLibreScraper(BaseScraper):
@@ -19,41 +36,59 @@ class MercadoLibreScraper(BaseScraper):
         results = []
 
         try:
-            search_url = f"{self.base_url}/{query.replace(' ', '-')}"
-            await page.goto(search_url, timeout=self._timeout())
+            # URL correcta: minúsculas, guiones
+            slug = query.lower().replace(" ", "-")
+            search_url = f"{self.base_url}/{slug}"
 
+            await page.set_extra_http_headers({
+                "Accept-Language": "es-CO,es;q=0.9",
+                "Referer": "https://www.mercadolibre.com.co/",
+            })
+
+            await page.goto(search_url, wait_until="domcontentloaded", timeout=self._timeout())
+
+            # MeLi carga con JS — esperar más tiempo
             try:
-                await page.wait_for_selector(
-                    "li.ui-search-layout__item",
-                    timeout=15000,
-                )
+                await page.wait_for_selector("li.ui-search-layout__item", timeout=25000)
             except Exception:
-                logger.warning(f"[MeLi CO] Timeout para '{query}'")
-                return results
+                # Intentar URL alternativa
+                try:
+                    alt_url = f"https://www.mercadolibre.com.co/jm/search?as_word={query.replace(' ', '+')}"
+                    await page.goto(alt_url, wait_until="domcontentloaded", timeout=self._timeout())
+                    await page.wait_for_selector("li.ui-search-layout__item", timeout=20000)
+                except Exception:
+                    logger.warning(f"[MeLi CO] Timeout para '{query}'")
+                    return results
 
             items = await page.query_selector_all("li.ui-search-layout__item")
 
-            for item in items[:6]:
+            for item in items[:8]:
                 try:
-                    # Título — a.poly-component__title
-                    title_el = await item.query_selector("a.poly-component__title")
+                    # Título
+                    title_el = (
+                        await item.query_selector("a.poly-component__title") or
+                        await item.query_selector(".poly-component__title") or
+                        await item.query_selector("h2.ui-search-item__title")
+                    )
 
-                    # Precio actual con descuento — .poly-price__current .andes-money-amount__fraction
-                    # Viene como "1.013.553" (puntos = separador de miles en CO)
-                    price_el = await item.query_selector(
-                        ".poly-price__current .andes-money-amount__fraction"
+                    # Precio actual
+                    price_el = (
+                        await item.query_selector(".poly-price__current .andes-money-amount__fraction") or
+                        await item.query_selector(".andes-money-amount__fraction") or
+                        await item.query_selector(".price-tag-fraction")
                     )
 
                     if not title_el or not price_el:
                         continue
 
-                    title     = (await title_el.inner_text()).strip()
+                    title = (await title_el.inner_text()).strip()
                     price_str = (
                         (await price_el.inner_text())
-                        .replace(".", "")   # quitar separador de miles
+                        .replace(".", "")
                         .replace(",", "")
                         .strip()
                     )
+
                     if not price_str.isdigit():
                         continue
 
@@ -61,9 +96,13 @@ class MercadoLibreScraper(BaseScraper):
                     if price < 5_000 or price > 80_000_000:
                         continue
 
-                    url = await title_el.get_attribute("href") or ""
-                    if "#" in url:
-                        url = url.split("#")[0]
+                    # URL — limpiar tracking
+                    raw_url = await title_el.get_attribute("href") or ""
+                    if not raw_url:
+                        link_el = await item.query_selector("a[href*='mercadolibre']")
+                        raw_url = await link_el.get_attribute("href") if link_el else ""
+
+                    url = _clean_meli_url(raw_url)
 
                     results.append(
                         ScrapedPrice(

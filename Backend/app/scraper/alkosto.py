@@ -1,7 +1,16 @@
 """
 Alkosto Colombia — scraper Playwright con selectores Algolia reales (2025).
-Alkosto migró de VTEX a Algolia como motor de búsqueda.
-Selectores extraídos del HTML real inspeccionado.
+Alkosto usa Algolia como motor de búsqueda.
+
+Selectores verificados en el HTML real:
+  - Contenedor: li.ais-InfiniteHits-item
+  - Título:     h3.product__item__top__title  (dentro del li)
+  - Precio:     span.price.price--redesign    (contiene "$1.799.900")
+  - Link:       a.product__item__top__link    (href="/reloj-samsung.../p/...")
+
+Nota: el precio viene como:
+  <span class="price price--redesign"><span>$</span>1.799.900</span>
+  inner_text() retorna "$1.799.900" que limpiamos correctamente.
 """
 from app.scraper.base import BaseScraper, ScrapedPrice
 import logging
@@ -19,13 +28,18 @@ class AlkostoScraper(BaseScraper):
 
         try:
             search_url = f"{self.base_url}/search?text={query.replace(' ', '+')}"
-            await page.goto(search_url, timeout=self._timeout())
+
+            await page.set_extra_http_headers({
+                "Accept-Language": "es-CO,es;q=0.9",
+            })
+
+            await page.goto(search_url, wait_until="domcontentloaded", timeout=self._timeout())
 
             # Algolia renderiza con: li.ais-InfiniteHits-item
             try:
                 await page.wait_for_selector(
                     "li.ais-InfiniteHits-item",
-                    timeout=15000,
+                    timeout=20000,
                 )
             except Exception:
                 logger.warning(f"[Alkosto] Timeout esperando productos para '{query}'")
@@ -35,35 +49,38 @@ class AlkostoScraper(BaseScraper):
 
             for item in items[:8]:
                 try:
-                    # Título
-                    title_el = await item.query_selector(
-                        "h3.product__item__top__title"
-                    )
-                    # Precio — span.price.price--redesign (contiene "$1.799.900")
-                    price_el = await item.query_selector(
-                        "span.price.price--redesign"
-                    )
-                    # Link
-                    link_el = await item.query_selector(
-                        "a.product__item__top__link"
+                    # Título — selector verificado en HTML real
+                    title_el = await item.query_selector("h3.product__item__top__title")
+
+                    # Precio — "span.price.price--redesign" verificado en HTML real
+                    # inner_text da "$1.799.900"
+                    price_el = await item.query_selector("span.price.price--redesign")
+
+                    # Link — "a.product__item__top__link" verificado en HTML real
+                    link_el = (
+                        await item.query_selector("a.product__item__top__link") or
+                        await item.query_selector("a[href*='/p/']")
                     )
 
                     if not title_el or not price_el:
                         continue
 
                     title     = (await title_el.inner_text()).strip()
-                    price_raw = (await price_el.inner_text())
+                    price_raw = (await price_el.inner_text()).strip()
+
                     # Limpiar: "$1.799.900" → 1799900
                     price_str = (
                         price_raw
                         .replace("$", "")
-                        .replace(".", "")
+                        .replace(".", "")   # separador de miles en Colombia
                         .replace(",", "")
                         .strip()
                         .split()[0]
                     )
+
                     if not price_str.isdigit():
                         continue
+
                     price = float(price_str)
                     if price < 5_000 or price > 80_000_000:
                         continue
