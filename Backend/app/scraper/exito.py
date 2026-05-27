@@ -15,30 +15,64 @@ class ExitoScraper(BaseScraper):
         try:
             search_url = f"{self.base_url}/s?q={query.replace(' ', '+')}&sort=score_desc&page=0"
             await page.goto(search_url, timeout=self._timeout())
-            await page.wait_for_selector("h3.styles_name__qQJiK", timeout=12000)
 
-            items = await page.query_selector_all(".productCard_contentInfo__CBBA7")
+            # Esperar alguno de los contenedores de producto conocidos
+            try:
+                await page.wait_for_selector(
+                    "[data-testid='product-card'], article[class*='productCard'], div[class*='ProductCard']",
+                    timeout=12000
+                )
+            except Exception:
+                return results
+
+            # Selectores de contenedor más amplios
+            items = (
+                await page.query_selector_all("[data-testid='product-card']") or
+                await page.query_selector_all("article[class*='productCard']") or
+                await page.query_selector_all("div[class*='product-card']")
+            )
 
             for item in items[:5]:
                 try:
-                    title_el = await item.query_selector("h3.styles_name__qQJiK")
-                    price_el = await item.query_selector("p.ProductPrice_container__price__XmMWA")
-                    link_el  = await item.query_selector("a[data-testid='product-link']")
+                    # Título
+                    title_el = (
+                        await item.query_selector("h3[class*='styles_name']") or
+                        await item.query_selector("p[class*='styles_name']") or
+                        await item.query_selector("[data-testid='product-name']") or
+                        await item.query_selector("h3")
+                    )
+                    # Precio
+                    price_el = (
+                        await item.query_selector("p[class*='ProductPrice_container__price']") or
+                        await item.query_selector("[data-testid='product-price']") or
+                        await item.query_selector("p[class*='price']") or
+                        await item.query_selector("span[class*='price']")
+                    )
+                    # Link
+                    link_el = (
+                        await item.query_selector("a[data-testid='product-link']") or
+                        await item.query_selector("a[href*='/p/']") or
+                        await item.query_selector("a")
+                    )
 
                     if not title_el or not price_el:
                         continue
 
                     title     = await title_el.inner_text()
+                    price_raw = await price_el.inner_text()
                     price_str = (
-                        (await price_el.inner_text())
+                        price_raw
                         .replace("$", "")
                         .replace(".", "")
                         .replace(",", "")
                         .strip()
+                        .split()[0]   # tomar solo el primer número si hay varios
                     )
+                    if not price_str.isdigit():
+                        continue
                     price = float(price_str)
                     href  = await link_el.get_attribute("href") if link_el else ""
-                    url   = f"{self.base_url}{href}" if href.startswith("/") else href
+                    url   = f"{self.base_url}{href}" if href and href.startswith("/") else href
 
                     results.append(
                         ScrapedPrice(

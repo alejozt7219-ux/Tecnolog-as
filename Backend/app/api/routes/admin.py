@@ -333,22 +333,46 @@ async def reset_demo_products(
     import unicodedata, re
 
     DEMO_PRODUCTS = [
-        "Audifonos Lenovo LP40",
-        "Asus TUF A15",
-        "iPhone 17 Pro Max",
-        "Samsung Galaxy S26",
-        "Mando inalambrico Xbox Series X",
+        "Nike Air Max",
+        "Auriculares Sony WH-CH520",
+        "Mochila portatil impermeable",
+        "Smartwatch Samsung Galaxy Watch",
+        "Cafetera Nespresso",
     ]
 
-    # Eliminar historial manual del admin
+    # Eliminar historial manual del admin y productos demo anteriores
     result = await db.execute(
-        select(SearchHistory).where(SearchHistory.user_id == admin.id)
+        select(SearchHistory).where(
+            SearchHistory.user_id == admin.id,
+            SearchHistory.triggered_by_admin == True,
+        )
     )
     for h in result.scalars().all():
         await db.delete(h)
 
     await db.commit()
-    return {"message": "Historial restablecido", "demo_products": DEMO_PRODUCTS}
+
+    # Lanzar scraping real de los 5 productos demo
+    from app.workers.tasks import scrape_product
+    import uuid as _uuid
+    from app.models.product import TaskStatus
+    launched = []
+    for product_query in DEMO_PRODUCTS:
+        task_id = str(_uuid.uuid4())
+        history = SearchHistory(
+            user_id=admin.id,
+            task_id=task_id,
+            query=product_query,
+            status=TaskStatus.pending,
+            triggered_by_admin=True,
+        )
+        db.add(history)
+        await db.flush()
+        scrape_product.delay(task_id=task_id, query=product_query, search_history_id=history.id)
+        launched.append(product_query)
+
+    await db.commit()
+    return {"message": "Scraping de productos demo iniciado", "demo_products": launched}
 
 
 @router.get("/scraping/logs", response_model=list[ScrapingLogOut])

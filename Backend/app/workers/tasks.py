@@ -6,24 +6,26 @@ from app.scraper.amazon import AmazonScraper
 from app.scraper.mercadolibre import MercadoLibreScraper
 from app.scraper.falabella import FalabellaScraper
 from app.scraper.exito import ExitoScraper
+from app.scraper.alkosto import AlkostoScraper
 
 logger = logging.getLogger(__name__)
 
 # Scrapers disponibles con su nombre de tienda para matchear con la BD
 SCRAPER_MAP = {
     "Amazon":        AmazonScraper,
-    "MercadoLibre":  MercadoLibreScraper,
+    "Mercado Libre": MercadoLibreScraper,
     "Falabella":     FalabellaScraper,
-    "Exito":         ExitoScraper,
+    "Éxito":         ExitoScraper,
+    "Alkosto":       AlkostoScraper,
 }
 
 # Productos de demo para scraping manual desde el panel admin
 DEMO_PRODUCTS = [
-    "Audifonos Lenovo LP40",
-    "Asus TUF A15",
-    "iPhone 17 Pro Max",
-    "Samsung Galaxy S26",
-    "Mando inalambrico Xbox Series X",
+    "Nike Air Max",
+    "Auriculares Sony WH-CH520",
+    "Mochila portatil impermeable",
+    "Smartwatch Samsung Galaxy Watch",
+    "Cafetera Nespresso",
 ]
 
 
@@ -48,11 +50,15 @@ def _get_active_scrapers(db):
     ).scalars().all()
 
     # Normalizar nombres para comparar (ignorar mayúsculas/tildes)
-    active_lower = {s.lower() for s in active_stores}
+    import unicodedata as _ud
+    def _norm(s):
+        return _ud.normalize("NFKD", s).encode("ascii", "ignore").decode().lower().strip()
+
+    active_lower = {_norm(s) for s in active_stores}
 
     selected = []
     for store_name, ScraperClass in SCRAPER_MAP.items():
-        if store_name.lower() in active_lower:
+        if _norm(store_name) in active_lower:
             selected.append(ScraperClass)
 
     # Si no hay ninguna tienda en la BD todavía, usar todas (modo inicial)

@@ -651,14 +651,19 @@ async function _loadDashboard() {
         _renderDashboardHistory(done.slice(0, 5));
         countTo('cnt-products', done.length, 800);
       } else {
-        // Sin resultados completados — mostrar productos demo
+        // Hay historial pero ninguno completado aún (están en proceso)
+        // Mostrar cache mientras esperan y hacer polling para actualizar
         _renderDashboardFromCache();
         countTo('cnt-products', Object.keys(CACHED_PRICES).length, 800);
+        // Reintentar en 5s por si alguno termina pronto
+        setTimeout(() => _refreshDashboardIfReady(), 5000);
       }
     } else {
       // Sin historial real — mostrar productos demo del cache
+      // y lanzar búsquedas reales en background para popular el historial
       _renderDashboardFromCache();
       countTo('cnt-products', Object.keys(CACHED_PRICES).length, 800);
+      _triggerDemoSearches();
     }
     countTo('cnt-stores', 5, 600);
     countTo('cnt-ops', 0, 600);
@@ -669,6 +674,40 @@ async function _loadDashboard() {
     countTo('cnt-stores', 5, 600);
     countTo('cnt-ops', 0, 600);
   }
+}
+
+/* Lanza búsquedas por texto de los 5 productos demo en background */
+async function _triggerDemoSearches() {
+  const DEMO_QUERIES = [
+    'Nike Air Max',
+    'Auriculares Sony WH-CH520',
+    'Mochila portatil impermeable',
+    'Smartwatch Samsung Galaxy Watch',
+    'Cafetera Nespresso',
+  ];
+  // Lanzar los 5 en paralelo sin bloquear la UI
+  const taskIds = [];
+  for (const q of DEMO_QUERIES) {
+    try {
+      const res = await ApiScan.searchByText(q);
+      if (res?.task_id) taskIds.push(res.task_id);
+    } catch (_) { /* ignorar errores individuales */ }
+  }
+  if (taskIds.length === 0) return;
+  // Esperar ~15s y refrescar el dashboard con los resultados reales
+  setTimeout(() => _refreshDashboardIfReady(), 15000);
+}
+
+/* Refresca el dashboard solo si ya hay resultados completados */
+async function _refreshDashboardIfReady() {
+  try {
+    const history = await ApiScan.getGlobalHistory(1, 10);
+    const done = (history || []).filter(h => h.product && h.status === 'done');
+    if (done.length) {
+      _renderDashboardHistory(done.slice(0, 5));
+      countTo('cnt-products', done.length, 400);
+    }
+  } catch (_) {}
 }
 
 function _renderDashboardFromCache() {
@@ -1366,49 +1405,49 @@ const CACHED_PRICES = {
   'nike-air-max': {
     name: 'Nike Air Max',
     prices: [
-      { store: { name: 'Falabella'     }, price: 289990, currency: 'COP', in_stock: true,  url: 'https://www.falabella.com.co' },
-      { store: { name: 'Mercado Libre' }, price: 265000, currency: 'COP', in_stock: true,  url: 'https://www.mercadolibre.com.co' },
-      { store: { name: 'Éxito'         }, price: 299990, currency: 'COP', in_stock: false, url: 'https://www.exito.com' },
-      { store: { name: 'Amazon'        }, price: 310000, currency: 'COP', in_stock: true,  url: 'https://www.amazon.com' },
-      { store: { name: 'Alkosto'       }, price: 275000, currency: 'COP', in_stock: true,  url: 'https://www.alkosto.com' },
+      { store: { name: 'Falabella'     }, price: 289990, currency: 'COP', in_stock: true,  url: 'https://www.falabella.com.co/falabella-co/search?Ntt=Nike+Air+Max' },
+      { store: { name: 'Mercado Libre' }, price: 265000, currency: 'COP', in_stock: true,  url: 'https://listado.mercadolibre.com.co/Nike-Air-Max' },
+      { store: { name: 'Éxito'         }, price: 299990, currency: 'COP', in_stock: false, url: 'https://www.exito.com/s?q=Nike+Air+Max' },
+      { store: { name: 'Amazon'        }, price: 310000, currency: 'COP', in_stock: true,  url: 'https://www.amazon.com/s?k=Nike+Air+Max' },
+      { store: { name: 'Alkosto'       }, price: 275000, currency: 'COP', in_stock: true,  url: 'https://www.alkosto.com/search?text=Nike+Air+Max' },
     ]
   },
   'auriculares-sony': {
-    name: 'Auriculares Sony WH-1000XM5',
+    name: 'Auriculares Sony WH-CH520',
     prices: [
-      { store: { name: 'Falabella'     }, price: 899990, currency: 'COP', in_stock: true,  url: 'https://www.falabella.com.co' },
-      { store: { name: 'Mercado Libre' }, price: 820000, currency: 'COP', in_stock: true,  url: 'https://www.mercadolibre.com.co' },
-      { store: { name: 'Amazon'        }, price: 875000, currency: 'COP', in_stock: true,  url: 'https://www.amazon.com' },
-      { store: { name: 'Alkosto'       }, price: 849000, currency: 'COP', in_stock: false, url: 'https://www.alkosto.com' },
+      { store: { name: 'Falabella'     }, price: 899990, currency: 'COP', in_stock: true,  url: 'https://www.falabella.com.co/falabella-co/search?Ntt=Sony+WH-CH520' },
+      { store: { name: 'Mercado Libre' }, price: 820000, currency: 'COP', in_stock: true,  url: 'https://listado.mercadolibre.com.co/Sony-WH-CH520' },
+      { store: { name: 'Amazon'        }, price: 875000, currency: 'COP', in_stock: true,  url: 'https://www.amazon.com/s?k=Sony+WH-CH520' },
+      { store: { name: 'Alkosto'       }, price: 849000, currency: 'COP', in_stock: false, url: 'https://www.alkosto.com/search?text=Sony+WH-CH520' },
     ]
   },
   'mochila': {
     name: 'Mochila Portátil Impermeable',
     prices: [
-      { store: { name: 'Mercado Libre' }, price: 89900,  currency: 'COP', in_stock: true,  url: 'https://www.mercadolibre.com.co' },
-      { store: { name: 'Éxito'         }, price: 99990,  currency: 'COP', in_stock: true,  url: 'https://www.exito.com' },
-      { store: { name: 'Falabella'     }, price: 109990, currency: 'COP', in_stock: true,  url: 'https://www.falabella.com.co' },
-      { store: { name: 'Amazon'        }, price: 95000,  currency: 'COP', in_stock: true,  url: 'https://www.amazon.com' },
-      { store: { name: 'Alkosto'       }, price: 87500,  currency: 'COP', in_stock: false, url: 'https://www.alkosto.com' },
-      { store: { name: 'Ripley'        }, price: 92000,  currency: 'COP', in_stock: true,  url: 'https://www.ripley.com.co' },
+      { store: { name: 'Mercado Libre' }, price: 89900,  currency: 'COP', in_stock: true,  url: 'https://listado.mercadolibre.com.co/mochila-portatil-impermeable' },
+      { store: { name: 'Éxito'         }, price: 99990,  currency: 'COP', in_stock: true,  url: 'https://www.exito.com/s?q=mochila+portatil+impermeable' },
+      { store: { name: 'Falabella'     }, price: 109990, currency: 'COP', in_stock: true,  url: 'https://www.falabella.com.co/falabella-co/search?Ntt=mochila+portatil+impermeable' },
+      { store: { name: 'Amazon'        }, price: 95000,  currency: 'COP', in_stock: true,  url: 'https://www.amazon.com/s?k=mochila+portatil+impermeable' },
+      { store: { name: 'Alkosto'       }, price: 87500,  currency: 'COP', in_stock: false, url: 'https://www.alkosto.com/search?text=mochila+portatil+impermeable' },
+      { store: { name: 'Ripley'        }, price: 92000,  currency: 'COP', in_stock: true,  url: 'https://simple.ripley.com.co/buscar?query=mochila+portatil+impermeable' },
     ]
   },
   'samsung-galaxy': {
     name: 'Smartwatch Samsung Galaxy Watch',
     prices: [
-      { store: { name: 'Falabella'     }, price: 699990, currency: 'COP', in_stock: true,  url: 'https://www.falabella.com.co' },
-      { store: { name: 'Alkosto'       }, price: 649000, currency: 'COP', in_stock: true,  url: 'https://www.alkosto.com' },
-      { store: { name: 'Mercado Libre' }, price: 625000, currency: 'COP', in_stock: true,  url: 'https://www.mercadolibre.com.co' },
-      { store: { name: 'Éxito'         }, price: 679990, currency: 'COP', in_stock: false, url: 'https://www.exito.com' },
-      { store: { name: 'Amazon'        }, price: 660000, currency: 'COP', in_stock: true,  url: 'https://www.amazon.com' },
+      { store: { name: 'Falabella'     }, price: 699990, currency: 'COP', in_stock: true,  url: 'https://www.falabella.com.co/falabella-co/search?Ntt=Samsung+Galaxy+Watch' },
+      { store: { name: 'Alkosto'       }, price: 649000, currency: 'COP', in_stock: true,  url: 'https://www.alkosto.com/search?text=Samsung+Galaxy+Watch' },
+      { store: { name: 'Mercado Libre' }, price: 625000, currency: 'COP', in_stock: true,  url: 'https://listado.mercadolibre.com.co/Samsung-Galaxy-Watch' },
+      { store: { name: 'Éxito'         }, price: 679990, currency: 'COP', in_stock: false, url: 'https://www.exito.com/s?q=Samsung+Galaxy+Watch' },
+      { store: { name: 'Amazon'        }, price: 660000, currency: 'COP', in_stock: true,  url: 'https://www.amazon.com/s?k=Samsung+Galaxy+Watch' },
     ]
   },
   'nespresso': {
     name: 'Cafetera Automática Nespresso',
     prices: [
-      { store: { name: 'Falabella'     }, price: 459990, currency: 'COP', in_stock: true,  url: 'https://www.falabella.com.co' },
-      { store: { name: 'Éxito'         }, price: 429990, currency: 'COP', in_stock: true,  url: 'https://www.exito.com' },
-      { store: { name: 'Amazon'        }, price: 445000, currency: 'COP', in_stock: true,  url: 'https://www.amazon.com' },
+      { store: { name: 'Falabella'     }, price: 459990, currency: 'COP', in_stock: true,  url: 'https://www.falabella.com.co/falabella-co/search?Ntt=Cafetera+Nespresso' },
+      { store: { name: 'Éxito'         }, price: 429990, currency: 'COP', in_stock: true,  url: 'https://www.exito.com/s?q=Cafetera+Nespresso' },
+      { store: { name: 'Amazon'        }, price: 445000, currency: 'COP', in_stock: true,  url: 'https://www.amazon.com/s?k=Cafetera+Nespresso' },
     ]
   },
 };
