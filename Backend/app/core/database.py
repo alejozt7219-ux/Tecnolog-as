@@ -17,8 +17,10 @@ def init_db():
         settings.DATABASE_URL,
         echo=settings.DEBUG,
         pool_pre_ping=True,
-        pool_size=10,
-        max_overflow=20,
+        pool_size=3,
+        max_overflow=5,
+        pool_timeout=60,
+        pool_recycle=300,
     )
     AsyncSessionLocal = async_sessionmaker(
         engine,
