@@ -73,7 +73,7 @@ async def login(body: LoginRequest, db: AsyncSession = Depends(get_db)):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Usuario inactivo")
 
     return TokenResponse(
-        access_token=create_access_token({"sub": str(user.id), "role": user.role}),
+        access_token=create_access_token({"sub": str(user.id), "role": str(user.role)}),
         refresh_token=create_refresh_token({"sub": str(user.id)}),
     )
 
@@ -90,7 +90,7 @@ async def refresh(body: RefreshRequest, db: AsyncSession = Depends(get_db)):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Usuario no encontrado")
 
     return TokenResponse(
-        access_token=create_access_token({"sub": str(user.id), "role": user.role}),
+        access_token=create_access_token({"sub": str(user.id), "role": str(user.role)}),
         refresh_token=create_refresh_token({"sub": str(user.id)}),
     )
 

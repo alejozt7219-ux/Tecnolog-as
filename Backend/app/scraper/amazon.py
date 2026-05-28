@@ -23,6 +23,8 @@ class AmazonScraper(BaseScraper):
 
     async def search(self, query: str) -> list[ScrapedPrice]:
         # Crear contexto con stealth
+        context = None
+        page = None
         context = await self.browser.new_context(
             user_agent=(
                 "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
@@ -141,8 +143,10 @@ class AmazonScraper(BaseScraper):
         except Exception as e:
             logger.error(f"[Amazon CO] Error en búsqueda '{query}': {e}")
         finally:
-            await page.close()
-            await context.close()
+            if page:
+                await page.close()
+            if context:
+                await context.close()
 
         return results
 

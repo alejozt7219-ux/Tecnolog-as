@@ -4,7 +4,6 @@
    Importado antes de app.js en index.html.
    ═══════════════════════════════════════════════ */
 
-// Después
 const API_BASE = 'http://localhost:8000';
 
 /* ── Token storage ─────────────────────────────── */

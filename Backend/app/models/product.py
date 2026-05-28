@@ -45,7 +45,7 @@ class PriceResult(Base, TimestampMixin):
     product_id: Mapped[int] = mapped_column(ForeignKey("products.id"), index=True)
     store_id: Mapped[int] = mapped_column(ForeignKey("stores.id"), index=True)
     price: Mapped[float] = mapped_column(Float)
-    currency: Mapped[str] = mapped_column(String(3), default="MXN")
+    currency: Mapped[str] = mapped_column(String(3), default="COP")
     url: Mapped[str] = mapped_column(Text)
     title: Mapped[str | None] = mapped_column(String(500), nullable=True)
     in_stock: Mapped[bool] = mapped_column(Boolean, default=True)

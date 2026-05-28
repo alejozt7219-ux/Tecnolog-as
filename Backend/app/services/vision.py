@@ -1,8 +1,11 @@
+import logging
 import base64
 import json
 import httpx
 
 from app.core.config import settings
+
+logger = logging.getLogger(__name__)
 
 
 IDENTIFY_PROMPT = """
@@ -237,8 +240,8 @@ async def identify_product_from_image(
 
     except Exception as e:
 
-        print("ERROR PARSEANDO JSON:", e)
-        print("RAW RESPONSE:", raw)
+        logger.error(f"Error parseando JSON de vision: {e}")
+        logger.debug(f"Vision raw response: {raw}")
 
         return {
             "name": "Producto no identificado",

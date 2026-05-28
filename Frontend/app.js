@@ -955,11 +955,7 @@ async function _refreshDashboardIfReady() {
 
     _renderDashboardFromCache();
 
-    countTo(
-      'cnt-products',
-      Object.keys(CACHED_PRICES || {}).length,
-      400
-    );
+    countTo('cnt-products', 0, 400);
 
   } catch (err) {
 
@@ -973,11 +969,7 @@ async function _refreshDashboardIfReady() {
     // =========================
     _renderDashboardFromCache();
 
-    countTo(
-      'cnt-products',
-      Object.keys(CACHED_PRICES || {}).length,
-      400
-    );
+    countTo('cnt-products', 0, 400);
   }
 }
 
@@ -986,23 +978,15 @@ function _renderDashboardFromCache() {
   if (!tableWrap) return;
   const tbody = tableWrap.querySelector('tbody');
   if (!tbody) return;
-  tbody.innerHTML = '';
-  Object.entries(CACHED_PRICES).forEach(([key, data]) => {
-    const tr = document.createElement('tr');
-    const bestPrice = data.prices?.length
-      ? Math.min(...data.prices.map(p => p.price)).toLocaleString('es-CO', { style: 'currency', currency: 'COP', maximumFractionDigits: 0 })
-      : '—';
-    const storeCount = data.prices?.length || '—';
-    const today = new Date().toLocaleDateString('es-CO');
-    tr.innerHTML = `
-      <td>${data.name}</td>
-      <td><time>${today}</time></td>
-      <td class="price-val">${bestPrice}</td>
-      <td>${storeCount} tiendas</td>
-      <td><button class="link-btn" onclick="goResultsFromHistory(${JSON.stringify(data.prices).replace(/"/g, '&quot;')}, '${data.name.replace(/'/g, "\'")}')">Ver Detalles</button></td>
-    `;
-    tbody.appendChild(tr);
-  });
+  tbody.innerHTML = `
+    <tr>
+      <td colspan="5" style="text-align:center;padding:40px 0">
+        <div style="font-size:28px;margin-bottom:10px;opacity:.4">🔍</div>
+        <div style="font-size:13px;color:var(--muted);margin-bottom:8px">Aún no hay búsquedas realizadas</div>
+        <div style="font-size:12px;color:var(--muted2)">Ve a <strong>Búsqueda Visual</strong> y analiza un producto para verlo aquí</div>
+      </td>
+    </tr>
+  `;
 }
 
 /* Actualiza la tabla de búsquedas recientes del dashboard — 5 visibles + "Ver más" hasta 10 */
@@ -2120,23 +2104,49 @@ function _buildChartFromPrices(productName, prices) {
   return { productName, labels, stores };
 }
 
-/* Elige al azar un producto (real o demo) y renderiza el chart */
+/* Cola aleatoria sin repetición: garantiza que los 5 productos
+   roten completamente antes de repetir alguno */
+let _chartQueue = [];
+let _chartLastPick = null;
+
+function _pickNextChartProduct(entries) {
+  // Si la cola está vacía o solo queda el último elegido, recargar shuffleada
+  if (_chartQueue.length === 0) {
+    // Fisher-Yates shuffle
+    const arr = [...entries];
+    for (let i = arr.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [arr[i], arr[j]] = [arr[j], arr[i]];
+    }
+    // Asegurarse de que el primer elemento no sea igual al último elegido
+    if (_chartLastPick !== null && arr.length > 1 && arr[0] === _chartLastPick) {
+      // Mover el primero al final
+      arr.push(arr.shift());
+    }
+    _chartQueue = arr;
+  }
+  const pick = _chartQueue.shift();
+  _chartLastPick = pick;
+  return pick;
+}
+
+/* Elige un producto de la cola rotatoria (real o demo) y renderiza el chart */
 async function renderRandomChart() {
   try {
     // Intentar con historial real primero
     const hist = await ApiScan.getGlobalHistory(1, 20).catch(() => []);
     const done = (hist || []).filter(h => h.product?.prices?.length >= 2);
     if (done.length) {
-      const pick = done[Math.floor(Math.random() * done.length)];
+      const pick = _pickNextChartProduct(done);
       const data = _buildChartFromPrices(pick.product.name, pick.product.prices);
       _updateChartHeader(data.productName);
       renderPriceChart(data);
       return;
     }
   } catch (_) {}
-  // Fallback: producto demo al azar
+  // Fallback: productos demo en rotación sin repetición
   const cacheEntries = Object.values(CACHED_PRICES);
-  const pick = cacheEntries[Math.floor(Math.random() * cacheEntries.length)];
+  const pick = _pickNextChartProduct(cacheEntries);
   const data = _buildChartFromPrices(pick.name, pick.prices);
   _updateChartHeader(data.productName);
   renderPriceChart(data);
@@ -2775,7 +2785,7 @@ window.showScreen = function showScreenExtended(id) {
           countTo('cnt-products', done.length, 800);
         } else {
           _renderDashboardFromCache();
-          countTo('cnt-products', Object.keys(CACHED_PRICES).length, 800);
+          countTo('cnt-products', 0, 800);
           // Arrancar polling por si el scraping acaba de terminar
           _startDashboardPolling(0);
         }

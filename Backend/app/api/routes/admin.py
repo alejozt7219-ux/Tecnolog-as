@@ -253,7 +253,6 @@ async def trigger_scraping(
     db: AsyncSession = Depends(get_db),
     admin: User = Depends(require_admin),
 ):
-    import uuid as _uuid
     from app.workers.tasks import scrape_product
     from app.models.product import SearchHistory, TaskStatus
 
@@ -261,7 +260,7 @@ async def trigger_scraping(
     if not query:
         raise HTTPException(status_code=422, detail="Debes especificar un producto a scrapear.")
 
-    task_id = str(_uuid.uuid4())
+    task_id = str(uuid.uuid4())
 
     # Crear el historial asociado al admin, marcado como global para todos los usuarios
     history = SearchHistory(
@@ -292,7 +291,7 @@ async def fix_default_stores(
     CORRECT = {
         "Amazon":       "https://www.amazon.com",
         "Alkosto":      "https://www.alkosto.com",
-        "MercadoLibre": "https://www.mercadolibre.com.co",
+        "Mercado Libre": "https://www.mercadolibre.com.co",
         "Falabella":    "https://www.falabella.com.co",
         "Éxito":        "https://www.exito.com",
     }
@@ -309,7 +308,7 @@ async def fix_default_stores(
             await db.delete(store)
             continue
         # Borrar duplicados MercadoLibre (queda solo el primero)
-        if "mercadolibre" in name_key or "mercado libre" in name_key.replace("mercadolibre",""):
+        if "mercadolibre" in name_key or "mercadolibre" in name_key.replace(" ", ""):
             if "mercadolibre" in seen:
                 await db.delete(store)
                 continue

@@ -60,14 +60,16 @@ class RedisAwareScheduler(PersistentScheduler):
         minute  = int(sched.get("minute", 30))
 
         if enabled:
+            from datetime import datetime, timezone as _tz
             entry = ScheduleEntry(
-                name     = DAILY_ENTRY_NAME,
-                task     = DAILY_TASK,
-                schedule = crontab(hour=str(hour), minute=str(minute)),
-                args     = (),
-                kwargs   = {},
-                options  = {},
-                app      = self.app,
+                name         = DAILY_ENTRY_NAME,
+                task         = DAILY_TASK,
+                schedule     = crontab(hour=str(hour), minute=str(minute)),
+                args         = (),
+                kwargs       = {},
+                options      = {},
+                last_run_at  = datetime.now(_tz.utc),
+                app          = self.app,
             )
             self.data[DAILY_ENTRY_NAME] = entry
             logger.info(f"[RedisScheduler] Schedule activado → {hour:02d}:{minute:02d} daily")

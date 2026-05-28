@@ -63,6 +63,7 @@ class SearchHistoryOut(BaseModel):
     query: str
     status: TaskStatus
     image_url: str | None
+    triggered_by_admin: bool = False
     created_at: datetime
     product: ProductOut | None = None
 

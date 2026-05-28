@@ -1,6 +1,8 @@
 import asyncio
 import logging
 import random
+import re
+import unicodedata
 from app.workers.celery_app import celery_app
 from app.scraper.amazon import AmazonScraper
 from app.scraper.mercadolibre import MercadoLibreScraper
@@ -68,9 +70,6 @@ def scrape_product(self, task_id: str, query: str, search_history_id):
     from sqlalchemy.orm import Session
     from app.models.product import SearchHistory, Product, PriceResult, Store, TaskStatus
     from app.core.config import settings
-    import unicodedata
-    import re
-
     sync_url = settings.DATABASE_URL.replace("postgresql+asyncpg://", "postgresql+psycopg2://")
     engine = create_engine(sync_url)
 
@@ -93,16 +92,28 @@ def scrape_product(self, task_id: str, query: str, search_history_id):
                     all_results.extend(store_results)
             return all_results
 
-        all_results = run_async(_scrape())
-
         history = db.get(SearchHistory, search_history_id) if search_history_id else None
+
+        # Mark as processing so the frontend knows the task has started
+        if history:
+            history.status = TaskStatus.processing
+            db.commit()
+
+        try:
+            all_results = run_async(_scrape())
+        except Exception as exc:
+            logger.error(f"[Task {task_id}] Error durante scraping: {exc}")
+            if history:
+                history.status = TaskStatus.error
+                history.error_message = str(exc)
+                db.commit()
+            return
 
         if not all_results:
             if history:
                 history.status = TaskStatus.error
                 history.error_message = "No se encontraron resultados"
                 db.commit()
-            engine.dispose()
             return
 
         normalized = unicodedata.normalize("NFKD", query).lower()
@@ -121,10 +132,9 @@ def scrape_product(self, task_id: str, query: str, search_history_id):
             db.execute(delete(PriceResult).where(PriceResult.product_id == product.id))
             db.flush()
 
-        import re as _re
         def _norm_store(name):
             n = unicodedata.normalize('NFKD', name).lower()
-            return _re.sub(r'[^a-z0-9]', '', n)
+            return re.sub(r'[^a-z0-9]', '', n)
 
         best_by_store = {}
         for scraped in all_results:
@@ -231,9 +241,6 @@ def run_startup_demo_scraping():
     from app.models.user import User, UserRole
     from app.core.config import settings
     import uuid
-    import unicodedata
-    import re
-
     sync_url = settings.DATABASE_URL.replace("postgresql+asyncpg://", "postgresql+psycopg2://")
     engine = create_engine(sync_url)
 
