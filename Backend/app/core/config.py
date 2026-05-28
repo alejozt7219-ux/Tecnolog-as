@@ -32,6 +32,15 @@ class Settings(BaseSettings):
 
     # Database
     DATABASE_URL: str
+    @field_validator("DATABASE_URL", mode="before")
+    @classmethod
+    def fix_db_url(cls, v):
+        if isinstance(v, str):
+            if v.startswith("postgres://"):
+                v = "postgresql+asyncpg://" + v[len("postgres://"):]
+            elif v.startswith("postgresql://"):
+                v = "postgresql+asyncpg://" + v[len("postgresql://"):]
+        return v
 
     # Redis
     REDIS_URL: str = "redis://localhost:6379/0"
