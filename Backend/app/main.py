@@ -1,8 +1,8 @@
 from fastapi import FastAPI
-from fastapi.middleware.cors import CORSMiddleware
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
 from app.core.config import settings
+from app.core.database import init_db
 from app.api.routes import auth, scan, admin
 
 app = FastAPI(
@@ -11,6 +11,7 @@ app = FastAPI(
     docs_url="/docs" if settings.DEBUG else None,
     redoc_url=None,
 )
+
 
 class CORSManualMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):
@@ -25,11 +26,18 @@ class CORSManualMiddleware(BaseHTTPMiddleware):
         response.headers["Access-Control-Allow-Origin"] = "*"
         return response
 
+
 app.add_middleware(CORSManualMiddleware)
 
 app.include_router(auth.router)
 app.include_router(scan.router)
 app.include_router(admin.router)
+
+
+@app.on_event("startup")
+async def startup():
+    init_db()
+
 
 @app.get("/health")
 async def health():

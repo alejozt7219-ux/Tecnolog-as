@@ -5,10 +5,13 @@ from sqlalchemy.engine import Connection
 from sqlalchemy.ext.asyncio import async_engine_from_config
 from alembic import context
 from app.core.config import settings
-from app.core.database import Base
+from app.core.database import Base, init_db
 
 # Importa todos los modelos para que Alembic los detecte
 import app.models  # noqa: F401
+
+# Inicializa el engine antes de usarlo
+init_db()
 
 config = context.config
 config.set_main_option("sqlalchemy.url", settings.DATABASE_URL)

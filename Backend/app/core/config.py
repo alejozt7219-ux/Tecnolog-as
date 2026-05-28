@@ -32,14 +32,20 @@ class Settings(BaseSettings):
 
     # Database
     DATABASE_URL: str
+
     @field_validator("DATABASE_URL", mode="before")
     @classmethod
     def fix_db_url(cls, v):
-        if isinstance(v, str):
-            if v.startswith("postgres://"):
-                v = "postgresql+asyncpg://" + v[len("postgres://"):]
-            elif v.startswith("postgresql://"):
-                v = "postgresql+asyncpg://" + v[len("postgresql://"):]
+        if not v or not isinstance(v, str) or not v.strip():
+            raise ValueError(
+                "DATABASE_URL está vacío. Verifica que la variable esté configurada en Railway "
+                "y que la referencia ${{Postgres.DATABASE_PUBLIC_URL}} esté correctamente vinculada."
+            )
+        v = v.strip()
+        if v.startswith("postgres://"):
+            v = "postgresql+asyncpg://" + v[len("postgres://"):]
+        elif v.startswith("postgresql://") and "+asyncpg" not in v:
+            v = "postgresql+asyncpg://" + v[len("postgresql://"):]
         return v
 
     # Redis
@@ -49,7 +55,7 @@ class Settings(BaseSettings):
     CELERY_BROKER_URL: str = "redis://localhost:6379/0"
     CELERY_RESULT_BACKEND: str = "redis://localhost:6379/1"
 
-    # Google Gemini
+    # Groq
     GROQ_API_KEY: str
 
     # Scraping
