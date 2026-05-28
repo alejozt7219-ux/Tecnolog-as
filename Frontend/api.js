@@ -28,14 +28,14 @@ async function apiFetch(path, options = {}) {
 
   // Timeout 10s — si el backend no responde, falla limpiamente
   const controller = new AbortController();
-  const timeoutId  = setTimeout(() => controller.abort(), 10000);
+  const timeoutId  = setTimeout(() => controller.abort(), 30000);
 
   let res;
   try {
     res = await fetch(`${API_BASE}${path}`, { ...options, headers, signal: controller.signal });
   } catch (err) {
     clearTimeout(timeoutId);
-    if (err.name === 'AbortError') throw new Error('El servidor no responde (timeout). Verifica que el backend este corriendo en localhost:8000.');
+    if (err.name === 'AbortError') throw new Error('El servidor no responde (timeout). Intenta de nuevo.');
     throw new Error('Error de conexion. Verifica que el backend este activo.');
   }
   clearTimeout(timeoutId);
