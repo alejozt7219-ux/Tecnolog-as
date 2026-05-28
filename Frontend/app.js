@@ -1152,12 +1152,16 @@ function _renderStoresTable(stores) {
       <td style="color:var(--muted)">—</td>
       <td>—</td>
       <td>
-        <div class="actions-cell">
+        <div class="actions-cell" style="display:flex;align-items:center;gap:8px">
           <label class="toggle" aria-label="Activar o desactivar ${store.name}">
             <input type="checkbox" role="switch" aria-checked="${store.is_active}" ${store.is_active ? 'checked' : ''}
               onchange="toggleStore(this,'${safeN}');this.setAttribute('aria-checked',this.checked)">
             <span class="toggle-slider" aria-hidden="true"></span>
           </label>
+          <button class="icon-btn icon-btn--danger" data-tooltip="Eliminar tienda" aria-label="Eliminar tienda ${store.name}"
+            data-id="${store.id}" onclick="deleteStore(this,'${safeN}')">
+            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4h6v2"/></svg>
+          </button>
         </div>
       </td>
     `;
@@ -1448,13 +1452,15 @@ function _addRecentActivity(desc, tipo, statusClass) {
   if (tbody) _renderActivityLog(tbody);
 }
 
-/* Renderiza _activityLog en el tbody del overview, al tope de las filas de BD */
+/* Renderiza _activityLog en el tbody del overview, al tope de las filas de BD.
+   Las filas en-memoria (_activityLog, ordenadas desc) se insertan encima de las de BD. */
 function _renderActivityLog(tbody) {
   if (!tbody) return;
   // Quitar filas en-memoria previas
   Array.from(tbody.querySelectorAll('tr[data-mem]')).forEach(r => r.remove());
-  // Insertar al tope
-  [..._activityLog].reverse().forEach(item => {
+  // Para que el más reciente quede arriba: iterar de más viejo a más reciente (reverse),
+  // cada uno se inserta con insertBefore(firstChild), empujando al anterior hacia abajo.
+  [..._activityLog].slice().reverse().forEach(item => {
     const timeStr = new Date(item.ts).toLocaleString('es-CO');
     const statusHtml = item.statusClass
       ? `<span class="status-badge ${item.statusClass}">${item.statusClass === 's-green' ? 'Exitoso' : item.statusClass === 's-red' ? 'Error' : item.statusClass === 's-yellow' ? 'En proceso' : 'Aviso'}</span>`
@@ -1469,8 +1475,21 @@ function _renderActivityLog(tbody) {
       <td>${statusHtml}</td>`;
     tbody.insertBefore(row, tbody.firstChild);
   });
-  // Mantener máx 20 filas totales
-  while (tbody.rows.length > 20) tbody.deleteRow(tbody.rows.length - 1);
+  // Garantizar que las filas visibles (data-mem + filas de BD sin .overview-extra) no superen 5
+  const visibleDbRows = Array.from(tbody.querySelectorAll('tr:not([data-mem]):not(.overview-extra)')).filter(r => r.id !== 'overview-ver-mas-btn');
+  const memRows = Array.from(tbody.querySelectorAll('tr[data-mem]'));
+  const totalVisible = memRows.length + visibleDbRows.length;
+  if (totalVisible > 5) {
+    // Ocultar filas de BD que sobran (las del fondo, que son las más viejas)
+    const toHide = visibleDbRows.slice(5 - memRows.length);
+    toHide.forEach(r => { r.classList.add('overview-extra'); r.style.display = 'none'; });
+    // Actualizar el contador del botón ver-más si existe
+    const btn = document.getElementById('btn-ver-mas-overview');
+    if (btn) {
+      const hiddenCount = tbody.querySelectorAll('.overview-extra').length;
+      btn.textContent = `Ver más (${hiddenCount})`;
+    }
+  }
 }
 
 
@@ -1525,15 +1544,19 @@ async function _loadAdminOverview() {
     const tbody = document.querySelector('#admin-page-overview .table-wrap tbody');
     if (tbody && logs?.length) {
       tbody.innerHTML = '';
-      const overviewVisible = logs.slice(0, 5);
-      const overviewHidden  = logs.slice(5, 15);
+      const VISIBLE_LIMIT = 5;
+      // Cuántas filas en-memoria van a inyectarse encima — reservar espacio para ellas
+      const memCount = Math.min(_activityLog.length, VISIBLE_LIMIT);
+      const dbVisible = Math.max(0, VISIBLE_LIMIT - memCount);
+      const overviewVisible = logs.slice(0, dbVisible);
+      const overviewHidden  = logs.slice(dbVisible);   // todo lo que no cabe va al ver-más
       const renderOverviewRow = (item, hidden) => {
         const isHistory = 'query' in item;
         const sc = (isHistory ? item.status === 'done' : item.status === 'success') ? 's-green'
                  : (item.status === 'error') ? 's-red' : 's-yellow';
         const st = sc === 's-green' ? 'Exitoso' : sc === 's-red' ? 'Error' : 'En proceso';
         const desc = isHistory
-          ? (item.triggered_by_admin ? `Scraping manual: ${item.query}` : `Búsqueda usuario: ${item.query}`)
+          ? (item.triggered_by_admin ? `Scraping predeterminado: ${item.query}` : `Búsqueda usuario: ${item.query}`)
           : `Scraping automático completado`;
         const dateStr = new Date(item.created_at).toLocaleString('es-CO');
         const tr = document.createElement('tr');
@@ -1561,8 +1584,9 @@ async function _loadAdminOverview() {
       });
       _activityLog.sort((a, b) => b.ts - a.ts);
       if (_activityLog.length > 20) _activityLog.length = 20;
-      // Inyectar eventos en-memoria (login, logout, scraping auto, etc.) al tope
+      // Inyectar eventos en-memoria al tope (ya tienen espacio reservado)
       _renderActivityLog(tbody);
+      // Botón ver más — siempre al final
       const existingOvBtn = document.getElementById('overview-ver-mas-btn');
       if (existingOvBtn) existingOvBtn.remove();
       if (overviewHidden.length > 0) {
