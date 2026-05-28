@@ -111,7 +111,9 @@ const ApiAuth = {
     return apiFetch('/auth/me');
   },
 
-  logout() {
+  async logout() {
+    // Notificar al backend para registrar el evento (best-effort)
+    try { await apiFetch('/auth/logout', { method: 'POST' }); } catch (_) {}
     Auth.clear();
   },
 };
@@ -227,6 +229,9 @@ const ApiAdmin = {
   },
   async getScrapingHistory(page = 1, limit = 10) {
     return apiFetch(`/admin/scraping/history?page=${page}&limit=${limit}`);
+  },
+  async getActivityLog(page = 1, limit = 50) {
+    return apiFetch(`/admin/activity-log?page=${page}&limit=${limit}`);
   },
   async getScrapingSchedule() {
     return apiFetch('/admin/scraping/schedule');

@@ -6,6 +6,7 @@ from sqlalchemy.orm import selectinload
 from datetime import datetime, timedelta, timezone
 from app.core.database import get_db
 from app.core.deps import get_current_user
+from app.core.activity import log_event_async
 from app.models.user import User
 from app.models.product import SearchHistory, TaskStatus, Product, PriceResult
 from app.schemas.product import ScanResponse, TaskStatusResponse, SearchHistoryOut
@@ -140,6 +141,18 @@ async def search_by_text(
     await db.flush()
 
     scrape_product.delay(task_id=task_id, query=q, search_history_id=history.id)
+
+    # Registrar búsqueda del usuario en el activity log
+    await log_event_async(
+        db,
+        "user_search",
+        actor_id=current_user.id,
+        actor_name=current_user.name,
+        actor_role=str(current_user.role),
+        query=q,
+        task_id=task_id,
+    )
+
     await db.commit()
 
     return TaskStatusResponse(task_id=task_id, status=TaskStatus.pending)

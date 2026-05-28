@@ -4,6 +4,7 @@ from sqlalchemy import select
 from app.core.database import get_db
 from app.core.security import verify_password, create_access_token, create_refresh_token, decode_token, hash_password
 from app.core.deps import get_current_user
+from app.core.activity import log_event_async
 from app.models.user import User, UserRole
 from app.schemas.auth import LoginRequest, TokenResponse, RefreshRequest, UserOut, UserCreate
 
@@ -12,7 +13,6 @@ router = APIRouter(prefix="/auth", tags=["auth"])
 
 @router.post("/register", response_model=UserOut, status_code=201)
 async def register(body: UserCreate, db: AsyncSession = Depends(get_db)):
-    # Verificar que el email no esté en uso
     result = await db.execute(select(User).where(User.email == body.email))
     if result.scalar_one_or_none():
         raise HTTPException(
@@ -39,20 +39,25 @@ async def register(body: UserCreate, db: AsyncSession = Depends(get_db)):
     await db.commit()
     await db.refresh(user)
 
-    # FIX: Si es el primer admin, disparar el scraping demo UNA SOLA VEZ.
-    # Se usa un lock Redis (SET NX) para evitar el doble disparo si el beat
-    # schedule o cualquier otra fuente ya lo ejecutó en las últimas 24 h.
+    # Registrar evento de registro
+    await log_event_async(
+        db,
+        "user_registered",
+        actor_id=user.id,
+        actor_name=user.name,
+        actor_role=str(user.role),
+        detail=user.email,
+    )
+
     if is_first_admin:
         try:
             import redis as _redis
             from app.core.config import settings as _settings
             _r = _redis.from_url(_settings.REDIS_URL, decode_responses=True)
-            # SET NX: retorna True solo si la clave no existía → ganamos el lock
             if _r.set("pricevision:startup_demo_fired", "1", nx=True, ex=86400):
                 from app.workers.tasks import run_startup_demo_scraping
                 run_startup_demo_scraping.delay()
         except Exception:
-            # Si Redis no está disponible, disparar igual (mejor que no disparar)
             from app.workers.tasks import run_startup_demo_scraping
             run_startup_demo_scraping.delay()
 
@@ -72,10 +77,35 @@ async def login(body: LoginRequest, db: AsyncSession = Depends(get_db)):
     if not user.is_active:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Usuario inactivo")
 
+    # Registrar evento de login
+    await log_event_async(
+        db,
+        "user_login",
+        actor_id=user.id,
+        actor_name=user.name,
+        actor_role=str(user.role),
+    )
+
     return TokenResponse(
         access_token=create_access_token({"sub": str(user.id), "role": str(user.role)}),
         refresh_token=create_refresh_token({"sub": str(user.id)}),
     )
+
+
+@router.post("/logout")
+async def logout(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Registra el cierre de sesión del usuario."""
+    await log_event_async(
+        db,
+        "user_logout",
+        actor_id=current_user.id,
+        actor_name=current_user.name,
+        actor_role=str(current_user.role),
+    )
+    return {"ok": True}
 
 
 @router.post("/refresh", response_model=TokenResponse)

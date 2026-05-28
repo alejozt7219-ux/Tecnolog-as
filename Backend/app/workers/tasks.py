@@ -169,6 +169,21 @@ def scrape_product(self, task_id: str, query: str, search_history_id):
         db.commit()
         logger.info(f"[Task {task_id}] Completado. {len(all_results)} precios guardados.")
 
+        # Registrar fin de scraping en activity_logs
+        if history:
+            from app.core.activity import log_event_sync
+            event = "scraping_manual_end" if history.triggered_by_admin else "user_search"
+            actor = db.get(__import__('app.models.user', fromlist=['User']).User, history.user_id)
+            log_event_sync(
+                db,
+                event,
+                actor_id=history.user_id,
+                actor_name=actor.name if actor else None,
+                actor_role=str(actor.role) if actor else None,
+                query=query,
+                task_id=task_id,
+            )
+
     engine.dispose()
 
 
@@ -203,6 +218,16 @@ def run_daily_scraping():
         products = db.execute(select(Product)).scalars().all()
 
         launched = []
+        # Registrar inicio del scraping programado
+        from app.core.activity import log_event_sync
+        log_event_sync(
+            db,
+            "scraping_scheduled_start",
+            actor_name="Sistema",
+            actor_role="admin",
+            detail=f"{len(products)} producto(s) en cola",
+        )
+
         for product in products:
             task_id = str(uuid.uuid4())
             history = SearchHistory(
@@ -224,6 +249,18 @@ def run_daily_scraping():
         db.commit()
 
     logger.info(f"[Daily] Scraping programado lanzado para {len(launched)} productos: {launched}")
+
+    # Registrar fin del scraping programado (fuera del with para que db no esté cerrada)
+    with Session(engine) as db2:
+        from app.core.activity import log_event_sync
+        log_event_sync(
+            db2,
+            "scraping_scheduled_end",
+            actor_name="Sistema",
+            actor_role="admin",
+            detail=f"{len(launched)} producto(s) procesados",
+        )
+
     engine.dispose()
     return {"launched": launched}
 

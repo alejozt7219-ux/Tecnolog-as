@@ -3,6 +3,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func
 from app.core.database import get_db
 from app.core.deps import require_admin
+from app.core.activity import log_event_async
 from app.models.user import User, UserRole
 from app.models.product import Store, ScrapingLog, SearchHistory, Product
 from app.schemas.auth import UserOut, UserCreate, UserToggle
@@ -155,6 +156,16 @@ async def delete_user(
     if not user:
         raise HTTPException(status_code=404, detail="Usuario no encontrado")
 
+    # Registrar evento ANTES de borrar para conservar el nombre
+    await log_event_async(
+        db,
+        "user_deleted",
+        actor_id=admin.id,
+        actor_name=admin.name,
+        actor_role=str(admin.role),
+        detail=f"{user.name} ({user.email})",
+    )
+
     # Borrar registros relacionados antes de eliminar el usuario
     from app.models.product import SearchHistory
     history = await db.execute(select(SearchHistory).where(SearchHistory.user_id == user_id))
@@ -196,12 +207,20 @@ async def create_store(
 async def delete_store(
     store_id: int,
     db: AsyncSession = Depends(get_db),
-    _: User = Depends(require_admin),
+    admin: User = Depends(require_admin),
 ):
     store = await db.get(Store, store_id)
     if not store:
         raise HTTPException(status_code=404, detail="Tienda no encontrada")
 
+    await log_event_async(
+        db,
+        "store_deleted",
+        actor_id=admin.id,
+        actor_name=admin.name,
+        actor_role=str(admin.role),
+        detail=store.name,
+    )
     await db.delete(store)
     await db.commit()
 
@@ -276,6 +295,17 @@ async def trigger_scraping(
 
     # Encolar en Celery
     scrape_product.delay(task_id=task_id, query=query, search_history_id=history.id)
+
+    # Registrar inicio de scraping manual
+    await log_event_async(
+        db,
+        "scraping_manual_start",
+        actor_id=admin.id,
+        actor_name=admin.name,
+        actor_role=str(admin.role),
+        query=query,
+        task_id=task_id,
+    )
 
     return {"message": "Scraping manual iniciado", "task_id": task_id, "query": query}
 
@@ -501,3 +531,62 @@ async def scraping_history(
         }
         for h in histories
     ]
+
+# ── Activity Log ──────────────────────────────────────
+@router.get("/activity-log")
+async def get_activity_log(
+    page: int = Query(1, ge=1),
+    limit: int = Query(50, ge=1, le=200),
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(require_admin),
+):
+    """
+    Retorna el historial de eventos del sistema:
+    scraping programado/manual (inicio y fin), login/logout/registro de usuarios,
+    usuario borrado, tienda borrada y búsquedas de usuarios.
+    """
+    from app.models.product import ActivityLog
+
+    LABELS = {
+        "scraping_scheduled_start": "Scraping programado iniciado",
+        "scraping_scheduled_end":   "Scraping programado finalizado",
+        "scraping_manual_start":    "Scraping manual iniciado",
+        "scraping_manual_end":      "Scraping manual finalizado",
+        "user_registered":          "Usuario registrado",
+        "user_login":               "Inicio de sesión",
+        "user_logout":              "Cierre de sesión",
+        "user_deleted":             "Usuario eliminado",
+        "store_deleted":            "Tienda eliminada",
+        "user_search":              "Búsqueda de usuario",
+    }
+
+    offset = (page - 1) * limit
+    result = await db.execute(
+        select(ActivityLog)
+        .order_by(ActivityLog.created_at.desc())
+        .offset(offset)
+        .limit(limit)
+    )
+    entries = result.scalars().all()
+
+    total = await db.scalar(select(func.count(ActivityLog.id)))
+
+    return {
+        "total": total,
+        "page": page,
+        "limit": limit,
+        "items": [
+            {
+                "id":          e.id,
+                "event_type":  e.event_type,
+                "label":       LABELS.get(e.event_type, e.event_type),
+                "actor_name":  e.actor_name,
+                "actor_role":  e.actor_role,
+                "detail":      e.detail,
+                "query":       e.query,
+                "task_id":     e.task_id,
+                "created_at":  e.created_at.isoformat(),
+            }
+            for e in entries
+        ],
+    }

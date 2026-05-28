@@ -81,3 +81,41 @@ class ScrapingLog(Base, TimestampMixin):
     errors_count: Mapped[int] = mapped_column(Integer, default=0)
     duration_seconds: Mapped[float | None] = mapped_column(Float, nullable=True)
     error_detail: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+class ActivityEventType(str, enum.Enum):
+    # Scraping
+    scraping_scheduled_start  = "scraping_scheduled_start"
+    scraping_scheduled_end    = "scraping_scheduled_end"
+    scraping_manual_start     = "scraping_manual_start"
+    scraping_manual_end       = "scraping_manual_end"
+    # Usuarios
+    user_registered  = "user_registered"
+    user_login       = "user_login"
+    user_logout      = "user_logout"
+    user_deleted     = "user_deleted"
+    # Tiendas
+    store_deleted    = "store_deleted"
+    # Búsquedas de usuario
+    user_search      = "user_search"
+
+
+class ActivityLog(Base, TimestampMixin):
+    """Registro de eventos de auditoría del sistema."""
+    __tablename__ = "activity_logs"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    event_type: Mapped[ActivityEventType] = mapped_column(
+        SAEnum(ActivityEventType), index=True
+    )
+    # Actor: usuario que generó el evento (puede ser None si es sistema)
+    actor_id: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    actor_name: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    actor_role: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    # Contexto extra (nombre de la tienda borrada, query buscada, etc.)
+    detail: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    # Para scraping: query asociada
+    query: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    # Para tasks: task_id de Celery
+    task_id: Mapped[str | None] = mapped_column(String(255), nullable=True)

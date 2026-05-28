@@ -1510,14 +1510,12 @@ function _renderActivityLog(tbody) {}
 
 async function _loadAdminOverview() {
   try {
-    // Timeout de seguridad: si el backend no responde en 8s, no bloquear la UI
     const timeout = new Promise((_, rej) => setTimeout(() => rej(new Error('timeout')), 8000));
 
-    // Cargar overview y stores en paralelo — stores es la fuente de verdad para los conteos
-    const [data, logs, stores] = await Promise.race([
+    const [data, activityData, stores] = await Promise.race([
       Promise.all([
         ApiAdmin.getOverview(),
-        ApiAdmin.getScrapingHistory(1).catch(() => ApiAdmin.getScrapingLogs(1).catch(() => [])),
+        ApiAdmin.getActivityLog(1, 10).catch(() => ({ items: [] })),
         ApiAdmin.getStores().catch(() => null),
       ]),
       timeout.then(() => { throw new Error('timeout'); }),
@@ -1527,11 +1525,9 @@ async function _loadAdminOverview() {
     countTo('acnt-users',     data.users?.total        || 0, 1000);
     countTo('acnt-completed', data.searches?.completed || 0, 1000);
 
-    // Usar conteo REAL de tiendas (igual que Gestión de Tiendas)
     const totalStores  = stores ? stores.length : (data.stores?.total  || 0);
     const activeStores = stores ? stores.filter(s => s.is_active).length : (data.stores?.active || 0);
-
-    const storesRatio = document.getElementById('acnt-stores-ratio');
+    const storesRatio  = document.getElementById('acnt-stores-ratio');
     if (storesRatio) storesRatio.textContent = `${activeStores}/${totalStores}`;
 
     const lastExecCard = document.getElementById('acnt-last-exec');
@@ -1552,54 +1548,88 @@ async function _loadAdminOverview() {
       lastExec.textContent = new Date(data.scraping.last_run).toLocaleDateString('es-CO');
     }
 
-    // Actualizar tarjetas de scraping con historial real (sobreescribe data.scraping si hay datos frescos)
-    if (logs?.length) _updateScrapingStatCards(logs);
-
-    // Tabla de actividad reciente — máx 10 total: 5 visibles + 5 en "Ver más"
+    // ── Tabla de Actividad Reciente usando el nuevo activity-log ──────────────
+    const activityItems = activityData?.items || [];
     const tbody = document.querySelector('#admin-page-overview .table-wrap tbody');
-    if (tbody && logs?.length) {
+    if (tbody) {
       tbody.innerHTML = '';
-      const MAX_TOTAL     = 10;
-      const VISIBLE_LIMIT = 5;
-      const allLogs       = logs.slice(0, MAX_TOTAL);   // los 10 más recientes
-      const visibleLogs   = allLogs.slice(0, VISIBLE_LIMIT);
-      const hiddenLogs    = allLogs.slice(VISIBLE_LIMIT);
 
-      const renderOverviewRow = (item, isHidden) => {
-        const isHistory = 'query' in item;
-        const sc = (isHistory ? item.status === 'done' : item.status === 'success') ? 's-green'
-                 : (item.status === 'error') ? 's-red' : 's-yellow';
-        const st = sc === 's-green' ? 'Exitoso' : sc === 's-red' ? 'Error' : 'En proceso';
-        const desc = isHistory
-          ? (item.triggered_by_admin ? `Scraping: ${item.query}` : `Búsqueda usuario: ${item.query}`)
-          : `Scraping automático completado`;
+      // Iconos por tipo de evento
+      const ICONS = {
+        scraping_scheduled_start: `<svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>`,
+        scraping_scheduled_end:   `<svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>`,
+        scraping_manual_start:    `<svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>`,
+        scraping_manual_end:      `<svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>`,
+        user_registered:          `<svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>`,
+        user_login:               `<svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/><polyline points="10 17 15 12 10 7"/><line x1="15" y1="12" x2="3" y2="12"/></svg>`,
+        user_logout:              `<svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>`,
+        user_deleted:             `<svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/></svg>`,
+        store_deleted:            `<svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>`,
+        user_search:              `<svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>`,
+      };
+
+      // Badge colors por tipo de evento
+      const BADGE = {
+        scraping_scheduled_start: ['s-yellow', 'Iniciado'],
+        scraping_scheduled_end:   ['s-green',  'Finalizado'],
+        scraping_manual_start:    ['s-yellow', 'Iniciado'],
+        scraping_manual_end:      ['s-green',  'Finalizado'],
+        user_registered:          ['s-blue',   'Registrado'],
+        user_login:               ['s-green',  'Sesión iniciada'],
+        user_logout:              ['s-gray',   'Sesión cerrada'],
+        user_deleted:             ['s-red',    'Eliminado'],
+        store_deleted:            ['s-red',    'Eliminada'],
+        user_search:              ['s-blue',   'Búsqueda'],
+      };
+
+      const VISIBLE_LIMIT = 5;
+      const allItems   = activityItems.slice(0, 10);
+      const visible    = allItems.slice(0, VISIBLE_LIMIT);
+      const hidden     = allItems.slice(VISIBLE_LIMIT);
+
+      const renderActivityRow = (item, isHidden) => {
+        const icon   = ICONS[item.event_type] || ICONS['scraping_manual_start'];
+        const [badgeClass, badgeLabel] = BADGE[item.event_type] || ['s-gray', item.event_type];
         const dateStr = new Date(item.created_at).toLocaleString('es-CO');
+
+        // Descripción: label del evento + query si aplica + detail si aplica
+        let desc = item.label;
+        if (item.query)  desc += `: <em>${item.query}</em>`;
+        if (item.detail && !item.query) desc += ` — ${item.detail}`;
+
+        // Tipo de actor
+        const actorRole = item.actor_role === 'admin' ? 'Admin' : (item.actor_role === 'analyst' ? 'Analista' : 'Sistema');
+        const actorName = item.actor_name || 'Sistema';
+
         const tr = document.createElement('tr');
         if (isHidden) { tr.className = 'overview-extra'; tr.style.display = 'none'; }
         tr.innerHTML = `
-          <td><div class="act-icon" aria-hidden="true"><svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg></div></td>
+          <td><div class="act-icon" aria-hidden="true">${icon}</div></td>
           <td>${desc}</td>
-          <td style="color:var(--muted)">${isHistory ? (item.triggered_by_admin ? 'Admin' : 'Usuario') : 'Scraping'}</td>
+          <td style="color:var(--muted)">${actorRole} · ${actorName}</td>
           <td style="color:var(--muted)"><time>${dateStr}</time></td>
-          <td><span class="status-badge ${sc}">${st}</span></td>`;
+          <td><span class="status-badge ${badgeClass}">${badgeLabel}</span></td>`;
         tbody.appendChild(tr);
       };
 
-      // Visibles primero (más recientes), luego ocultos (más antiguos dentro del lote)
-      visibleLogs.forEach(item => renderOverviewRow(item, false));
-      hiddenLogs.forEach(item  => renderOverviewRow(item, true));
+      if (allItems.length === 0) {
+        const tr = document.createElement('tr');
+        tr.innerHTML = '<td colspan="5" style="text-align:center;color:var(--muted);padding:20px">Sin actividad registrada aún</td>';
+        tbody.appendChild(tr);
+      } else {
+        visible.forEach(item => renderActivityRow(item, false));
+        hidden.forEach(item  => renderActivityRow(item, true));
 
-      // Botón "Ver más" — sin toggle, al expandir desaparece
-      if (hiddenLogs.length > 0) {
-        const count = hiddenLogs.length;
-        const btnRow = document.createElement('tr');
-        btnRow.id = 'overview-ver-mas-btn';
-        btnRow.innerHTML = '<td colspan="5" style="text-align:center;padding:10px 0"><button class="link-btn" id="btn-ver-mas-overview" style="font-size:13px;padding:6px 18px;border:1px solid var(--border);border-radius:6px">Ver más (' + count + ')</button></td>';
-        tbody.appendChild(btnRow);
-        document.getElementById('btn-ver-mas-overview').addEventListener('click', function() {
-          document.querySelectorAll('#admin-page-overview .table-wrap tbody .overview-extra').forEach(r => r.style.display = '');
-          this.closest('tr').remove();   // quitar el botón al expandir
-        });
+        if (hidden.length > 0) {
+          const btnRow = document.createElement('tr');
+          btnRow.id = 'overview-ver-mas-btn';
+          btnRow.innerHTML = '<td colspan="5" style="text-align:center;padding:10px 0"><button class="link-btn" id="btn-ver-mas-overview" style="font-size:13px;padding:6px 18px;border:1px solid var(--border);border-radius:6px">Ver más (' + hidden.length + ')</button></td>';
+          tbody.appendChild(btnRow);
+          document.getElementById('btn-ver-mas-overview').addEventListener('click', function() {
+            document.querySelectorAll('#admin-page-overview .table-wrap tbody .overview-extra').forEach(r => r.style.display = '');
+            this.closest('tr').remove();
+          });
+        }
       }
     }
   } catch (_) {
