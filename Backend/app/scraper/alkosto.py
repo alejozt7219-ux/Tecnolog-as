@@ -13,13 +13,75 @@ def _normalize(text: str) -> str:
     return re.sub(r"[^\w\s]", "", text).lower()
 
 
-def _is_relevant(title: str, query: str, min_words: int = 1) -> bool:
-    q_words = [w for w in _normalize(query).split() if len(w) > 2]
+# Palabras sin valor semántico para el filtro
+_STOP_WORDS = {"de", "para", "con", "el", "la", "los", "las", "un", "una", "y", "en"}
+
+# Palabras que indican categorías completamente distintas — si el query
+# no las menciona y el título sí, es un falso positivo
+_CATEGORY_MARKERS = {
+    "zapatillas": ["zapato", "zapatilla", "tenis", "sneaker", "calzado", "shoe"],
+    "smartphone": ["celular", "smartphone", "telefono", "movil", "iphone", "galaxy", "pixel"],
+    "laptop":     ["laptop", "portatil", "computador", "notebook", "macbook"],
+    "freidora":   ["freidora", "air fryer", "freidor"],
+    "televisor":  ["televisor", "tv", "smart tv", "pantalla"],
+    "tablet":     ["tablet", "ipad"],
+    "auriculares":["auricular", "audifonos", "headphone", "earphone", "buds"],
+    "cafetera":   ["cafetera", "espresso", "nespresso"],
+    "nevera":     ["nevera", "refrigerador", "heladera"],
+    "lavadora":   ["lavadora", "secadora"],
+}
+
+
+def _get_category_from_query(query_norm: str) -> str | None:
+    """Detecta qué categoría de producto describe el query."""
+    for cat, markers in _CATEGORY_MARKERS.items():
+        if any(m in query_norm for m in markers):
+            return cat
+    return None
+
+
+def _title_in_same_category(title_norm: str, query_cat: str) -> bool:
+    """
+    Verifica que el título pertenezca a la misma categoría del query.
+    Si el query es zapatillas pero el título dice 'freidora', rechazar.
+    """
+    if not query_cat:
+        return True  # sin categoría detectada, no filtrar
+
+    expected_markers = _CATEGORY_MARKERS.get(query_cat, [])
+
+    # Verificar que el título NO pertenezca a una categoría completamente diferente
+    for cat, markers in _CATEGORY_MARKERS.items():
+        if cat == query_cat:
+            continue
+        if any(m in title_norm for m in markers):
+            # El título menciona una categoría diferente → falso positivo
+            return False
+
+    return True
+
+
+def _is_relevant(title: str, query: str, min_ratio: float = 0.4) -> bool:
+    """
+    Verifica relevancia del título respecto al query.
+    Requiere que al menos `min_ratio` de las palabras clave del query
+    aparezcan en el título, Y que el título sea de la misma categoría.
+    """
+    q_norm = _normalize(query)
+    t_norm = _normalize(title)
+
+    # Filtro de categoría cruzada
+    query_cat = _get_category_from_query(q_norm)
+    if query_cat and not _title_in_same_category(t_norm, query_cat):
+        return False
+
+    q_words = [w for w in q_norm.split() if len(w) > 2 and w not in _STOP_WORDS]
     if not q_words:
         return True
-    t_norm = _normalize(title)
+
     matches = sum(1 for w in q_words if w in t_norm)
-    return matches >= min(min_words, len(q_words))
+    ratio = matches / len(q_words)
+    return ratio >= min_ratio
 
 
 def _parse_price(raw: str) -> float | None:
@@ -34,13 +96,7 @@ class AlkostoScraper(BaseScraper):
     store_name = "Alkosto"
     base_url   = "https://www.alkosto.com"
 
-    # Selector real del item (inspeccionado)
     ITEM_SELECTOR  = "li.ais-InfiniteHits-item"
-
-    # Selectores reales (inspeccionados):
-    # Título: h3.product__item__top__title
-    # Link:   a.product__item__top__link  href="/nombre-producto/p/ID?algEvent=..."
-    # Precio: span.price.price--redesign  texto="$284.900"
     TITLE_SELECTOR = "h3.product__item__top__title"
     LINK_SELECTOR  = "a.product__item__top__link"
     PRICE_SELECTOR = "span.price.price--redesign"
@@ -57,21 +113,19 @@ class AlkostoScraper(BaseScraper):
             })
             await page.goto(search_url, wait_until="domcontentloaded", timeout=self._timeout())
 
-            # Alkosto carga resultados con Algolia JS — esperar más
             try:
                 await page.wait_for_selector(self.ITEM_SELECTOR, timeout=12000)
             except Exception:
                 logger.warning(f"[Alkosto] No cargaron items para '{query}'")
                 return results
 
-            await page.wait_for_timeout(2000)  # extra por si acaso
+            await page.wait_for_timeout(2000)
 
             items = await page.query_selector_all(self.ITEM_SELECTOR)
             logger.info(f"[Alkosto] {len(items)} items para '{query}'")
 
             for item in items[:15]:
                 try:
-                    # Título
                     title_el = await item.query_selector(self.TITLE_SELECTOR)
                     if not title_el:
                         continue
@@ -79,12 +133,10 @@ class AlkostoScraper(BaseScraper):
                     if not title:
                         continue
 
-                    # Relevancia
                     if not _is_relevant(title, query):
                         logger.debug(f"[Alkosto] Descartado: '{title}'")
                         continue
 
-                    # Precio
                     price_el = await item.query_selector(self.PRICE_SELECTOR)
                     if not price_el:
                         continue
@@ -92,12 +144,10 @@ class AlkostoScraper(BaseScraper):
                     if not price:
                         continue
 
-                    # URL: a.product__item__top__link href="/nombre/p/ID?algEvent=..."
                     link_el = await item.query_selector(self.LINK_SELECTOR)
                     if not link_el:
                         continue
                     href = await link_el.get_attribute("href") or ""
-                    # Limpiar tracking params
                     href = href.split("?")[0]
                     if not href:
                         continue

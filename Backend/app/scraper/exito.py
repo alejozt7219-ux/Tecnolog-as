@@ -13,13 +13,55 @@ def _normalize(text: str) -> str:
     return re.sub(r"[^\w\s]", "", text).lower()
 
 
-def _is_relevant(title: str, query: str, min_words: int = 1) -> bool:
-    q_words = [w for w in _normalize(query).split() if len(w) > 2]
+_STOP_WORDS = {"de", "para", "con", "el", "la", "los", "las", "un", "una", "y", "en"}
+
+_CATEGORY_MARKERS = {
+    "zapatillas": ["zapato", "zapatilla", "tenis", "sneaker", "calzado", "shoe"],
+    "smartphone": ["celular", "smartphone", "telefono", "movil", "iphone", "galaxy", "pixel"],
+    "laptop":     ["laptop", "portatil", "computador", "notebook", "macbook"],
+    "freidora":   ["freidora", "air fryer", "freidor"],
+    "televisor":  ["televisor", "tv", "smart tv", "pantalla"],
+    "tablet":     ["tablet", "ipad"],
+    "auriculares":["auricular", "audifonos", "headphone", "earphone", "buds"],
+    "cafetera":   ["cafetera", "espresso", "nespresso"],
+    "nevera":     ["nevera", "refrigerador", "heladera"],
+    "lavadora":   ["lavadora", "secadora"],
+}
+
+
+def _get_category_from_query(query_norm: str) -> str | None:
+    for cat, markers in _CATEGORY_MARKERS.items():
+        if any(m in query_norm for m in markers):
+            return cat
+    return None
+
+
+def _title_in_same_category(title_norm: str, query_cat: str) -> bool:
+    if not query_cat:
+        return True
+    for cat, markers in _CATEGORY_MARKERS.items():
+        if cat == query_cat:
+            continue
+        if any(m in title_norm for m in markers):
+            return False
+    return True
+
+
+def _is_relevant(title: str, query: str, min_ratio: float = 0.4) -> bool:
+    q_norm = _normalize(query)
+    t_norm = _normalize(title)
+
+    query_cat = _get_category_from_query(q_norm)
+    if query_cat and not _title_in_same_category(t_norm, query_cat):
+        return False
+
+    q_words = [w for w in q_norm.split() if len(w) > 2 and w not in _STOP_WORDS]
     if not q_words:
         return True
-    t_norm = _normalize(title)
+
     matches = sum(1 for w in q_words if w in t_norm)
-    return matches >= min(min_words, len(q_words))
+    ratio = matches / len(q_words)
+    return ratio >= min_ratio
 
 
 def _parse_price(raw: str) -> float | None:
@@ -34,15 +76,7 @@ class ExitoScraper(BaseScraper):
     store_name = "Éxito"
     base_url = "https://www.exito.com"
 
-    # Selector real del item (inspeccionado):
-    # <article class="productCard_productCard__M0677 ...">
-    # La clase tiene hash que cambia — usar selector estable
-    ITEM_SELECTOR = "article[class*='productCard_productCard']"
-
-    # Selectores reales (inspeccionados):
-    # Link:   a[data-testid='product-link']  href="/essenza-mini.../p"
-    # Título: h3[class*='styles_name']
-    # Precio: p[data-fs-container-price-otros='true']  texto="$ 401.900"
+    ITEM_SELECTOR  = "article[class*='productCard_productCard']"
     LINK_SELECTOR  = "a[data-testid='product-link']"
     TITLE_SELECTOR = "h3[class*='styles_name']"
     PRICE_SELECTOR = "p[data-fs-container-price-otros='true']"
@@ -55,7 +89,6 @@ class ExitoScraper(BaseScraper):
         try:
             await page.goto(search_url, wait_until="domcontentloaded", timeout=self._timeout())
 
-            # Éxito es Next.js — esperar items
             try:
                 await page.wait_for_selector(self.ITEM_SELECTOR, timeout=12000)
             except Exception:
@@ -69,7 +102,6 @@ class ExitoScraper(BaseScraper):
 
             for item in items[:12]:
                 try:
-                    # URL: a[data-testid='product-link'] href="/nombre/p"
                     link_el = await item.query_selector(self.LINK_SELECTOR)
                     if not link_el:
                         continue
@@ -78,7 +110,6 @@ class ExitoScraper(BaseScraper):
                         continue
                     url = f"{self.base_url}{href}" if href.startswith("/") else href
 
-                    # Título
                     title_el = await item.query_selector(self.TITLE_SELECTOR)
                     if not title_el:
                         continue
@@ -90,7 +121,6 @@ class ExitoScraper(BaseScraper):
                         logger.debug(f"[Éxito] Descartado: '{title}'")
                         continue
 
-                    # Precio: p[data-fs-container-price-otros='true'] → "$ 401.900"
                     price_el = await item.query_selector(self.PRICE_SELECTOR)
                     if not price_el:
                         continue

@@ -29,6 +29,108 @@ DEMO_PRODUCTS = [
     "Cafetera Nespresso",
 ]
 
+# ── Palabras que indican que un resultado es un ACCESORIO, no el producto ──────
+_ACCESSORY_KEYWORDS = [
+    "funda", "case", "cover", "protector", "carcasa", "estuche",
+    "vidrio templado", "screen protector", "mica", "film",
+    "cable", "cargador", "charger", "adaptador", "hub",
+    "correa", "band", "strap", "pulsera",
+    "soporte", "holder", "stand", "base",
+    "auricular replacement", "almohadilla", "ear pad", "ear tip",
+    "stylus", "lápiz", "pen para",
+    "teclado para", "keyboard for",
+    "mouse pad", "mousepad",
+    "mochila para laptop", "sleeve", "bolso para",
+]
+
+# Categorías y sus rangos de precio mínimo/máximo esperados en COP
+# Sirven para filtrar resultados absurdamente baratos (accesorios) o caros
+_PRICE_RANGES = {
+    "smartphone":   (800_000,   20_000_000),
+    "celular":      (800_000,   20_000_000),
+    "laptop":       (1_000_000, 30_000_000),
+    "portátil":     (1_000_000, 30_000_000),
+    "auriculares":  (50_000,    3_000_000),
+    "audífonos":    (50_000,    3_000_000),
+    "smartwatch":   (200_000,   5_000_000),
+    "tablet":       (400_000,   8_000_000),
+    "televisor":    (500_000,   20_000_000),
+    "zapatillas":   (100_000,   2_000_000),
+    "tenis":        (100_000,   2_000_000),
+    "consola":      (500_000,   5_000_000),
+    "cámara":       (500_000,   15_000_000),
+}
+
+
+def _norm_text(s: str) -> str:
+    n = unicodedata.normalize("NFKD", s or "").encode("ascii", "ignore").decode().lower()
+    return re.sub(r"[^\w\s]", "", n).strip()
+
+
+def _is_accessory(title: str) -> bool:
+    """Devuelve True si el título del resultado parece un accesorio."""
+    title_lower = title.lower()
+    return any(kw in title_lower for kw in _ACCESSORY_KEYWORDS)
+
+
+def _price_in_range(price: float, category: str) -> bool:
+    """Devuelve True si el precio está en el rango esperado para esa categoría."""
+    cat_lower = (category or "").lower()
+    for cat_key, (min_p, max_p) in _PRICE_RANGES.items():
+        if cat_key in cat_lower:
+            return min_p <= price <= max_p
+    # Sin categoría definida → aceptar cualquier precio razonable
+    return True
+
+
+def _title_matches_query(title: str, query: str, threshold: float = 0.35) -> bool:
+    """
+    Verifica que el título del resultado tenga al menos `threshold` de palabras
+    clave del query. Evita resultados completamente irrelevantes.
+    """
+    query_words = set(_norm_text(query).split())
+    # Ignorar palabras genéricas que aportan poco
+    stop_words = {"de", "para", "con", "the", "and", "or", "el", "la", "los", "las", "un", "una"}
+    query_words -= stop_words
+
+    if not query_words:
+        return True
+
+    title_norm = _norm_text(title)
+    matches = sum(1 for w in query_words if w in title_norm)
+    score = matches / len(query_words)
+
+    return score >= threshold
+
+
+def _filter_results(results, query: str, category: str) -> list:
+    """
+    Filtra los resultados scrapeados para quedarse solo con los relevantes:
+    1. No accesorios
+    2. Precio en rango para la categoría
+    3. Título con al menos 35% de palabras del query
+    """
+    filtered = []
+    for r in results:
+        title = r.title or ""
+
+        if _is_accessory(title):
+            logger.debug(f"[Filter] Descartado accesorio: '{title[:60]}'")
+            continue
+
+        if not _price_in_range(r.price, category):
+            logger.debug(f"[Filter] Precio fuera de rango ({r.price:,.0f} COP) para '{title[:60]}'")
+            continue
+
+        if not _title_matches_query(title, query):
+            logger.debug(f"[Filter] Título no coincide con query: '{title[:60]}'")
+            continue
+
+        filtered.append(r)
+
+    logger.info(f"[Filter] {len(filtered)}/{len(results)} resultados pasaron el filtro para '{query}'")
+    return filtered
+
 
 def run_async(coro):
     """Helper para correr corutinas dentro de tareas Celery (sync)."""
@@ -65,7 +167,7 @@ def _get_active_scrapers(db):
 
 
 @celery_app.task(bind=True, name="app.workers.tasks.scrape_product")
-def scrape_product(self, task_id: str, query: str, search_history_id):
+def scrape_product(self, task_id: str, query: str, search_history_id, category: str = None):
     from sqlalchemy import create_engine, select
     from sqlalchemy.orm import Session
     from app.models.product import SearchHistory, Product, PriceResult, Store, TaskStatus
@@ -94,7 +196,10 @@ def scrape_product(self, task_id: str, query: str, search_history_id):
 
         history = db.get(SearchHistory, search_history_id) if search_history_id else None
 
-        # Mark as processing so the frontend knows the task has started
+        # Intentar obtener la categoría del producto desde el historial si no viene
+        # (la vision la guarda en el campo query como parte del search_query)
+        effective_category = category or ""
+
         if history:
             history.status = TaskStatus.processing
             db.commit()
@@ -116,6 +221,21 @@ def scrape_product(self, task_id: str, query: str, search_history_id):
                 db.commit()
             return
 
+        # ── FILTRADO DE RELEVANCIA ─────────────────────────────────────────────
+        filtered_results = _filter_results(all_results, query, effective_category)
+
+        # Si el filtro fue demasiado agresivo y eliminó todo, usar resultados sin filtrar
+        # pero al menos excluir accesorios obvios
+        if not filtered_results:
+            logger.warning(f"[Task {task_id}] Filtro eliminó todos los resultados, aplicando filtro mínimo")
+            filtered_results = [r for r in all_results if not _is_accessory(r.title or "")]
+
+        # Si aún no hay nada, usar todos (mejor algo que nada)
+        if not filtered_results:
+            logger.warning(f"[Task {task_id}] Sin resultados relevantes, usando todos")
+            filtered_results = all_results
+        # ──────────────────────────────────────────────────────────────────────
+
         normalized = unicodedata.normalize("NFKD", query).lower()
         normalized = re.sub(r"[^\w\s]", "", normalized).strip()
 
@@ -136,8 +256,9 @@ def scrape_product(self, task_id: str, query: str, search_history_id):
             n = unicodedata.normalize('NFKD', name).lower()
             return re.sub(r'[^a-z0-9]', '', n)
 
+        # Guardar el mejor resultado por tienda (el más barato ENTRE LOS FILTRADOS)
         best_by_store = {}
-        for scraped in all_results:
+        for scraped in filtered_results:
             key = _norm_store(scraped.store_name)
             if key not in best_by_store or scraped.price < best_by_store[key].price:
                 best_by_store[key] = scraped
@@ -167,9 +288,8 @@ def scrape_product(self, task_id: str, query: str, search_history_id):
             history.product_id = product.id
 
         db.commit()
-        logger.info(f"[Task {task_id}] Completado. {len(all_results)} precios guardados.")
+        logger.info(f"[Task {task_id}] Completado. {len(best_by_store)} tiendas con precios relevantes.")
 
-        # Registrar fin de scraping en activity_logs
         if history:
             from app.core.activity import log_event_sync
             event = "scraping_manual_end" if history.triggered_by_admin else "user_search"
@@ -191,8 +311,6 @@ def scrape_product(self, task_id: str, query: str, search_history_id):
 def run_daily_scraping():
     """
     Scraping diario de todos los productos existentes.
-    Crea un SearchHistory por producto con triggered_by_admin=True
-    para que aparezcan en el historial de scraping del panel admin.
     """
     from sqlalchemy import create_engine, select
     from sqlalchemy.orm import Session
@@ -205,7 +323,6 @@ def run_daily_scraping():
     engine = create_engine(sync_url)
 
     with Session(engine) as db:
-        # Buscar el primer admin activo para asociar el historial
         admin = db.execute(
             select(User).where(User.role == UserRole.admin, User.is_active == True)
         ).scalars().first()
@@ -218,7 +335,6 @@ def run_daily_scraping():
         products = db.execute(select(Product)).scalars().all()
 
         launched = []
-        # Registrar inicio del scraping programado
         from app.core.activity import log_event_sync
         log_event_sync(
             db,
@@ -250,7 +366,6 @@ def run_daily_scraping():
 
     logger.info(f"[Daily] Scraping programado lanzado para {len(launched)} productos: {launched}")
 
-    # Registrar fin del scraping programado (fuera del with para que db no esté cerrada)
     with Session(engine) as db2:
         from app.core.activity import log_event_sync
         log_event_sync(
@@ -268,9 +383,8 @@ def run_daily_scraping():
 @celery_app.task(name="app.workers.tasks.run_startup_demo_scraping")
 def run_startup_demo_scraping():
     """
-    Se ejecuta una vez al iniciar la app (via beat o señal de startup).
-    Hace scraping de los 5 productos predeterminados si aún no tienen precios.
-    NO se lanza desde el botón de scraping manual.
+    Se ejecuta una vez al iniciar la app.
+    Hace scraping de los productos predeterminados.
     """
     from sqlalchemy import create_engine, select
     from sqlalchemy.orm import Session
@@ -293,17 +407,6 @@ def run_startup_demo_scraping():
 
         launched = []
         for product_query in DEMO_PRODUCTS:
-            # Verificar si ya existe historial reciente para este producto
-            normalized = unicodedata.normalize("NFKD", product_query).lower()
-            normalized = re.sub(r"[^\w\s]", "", normalized).strip()
-
-            product = db.execute(
-                select(Product).where(Product.normalized_name == normalized)
-            ).scalar_one_or_none()
-
-            # Siempre re-scrapear en startup para mantener precios y URLs actualizados
-            # (no omitir aunque ya tenga precios — pueden tener URLs incorrectas)
-
             task_id = str(uuid.uuid4())
             history = SearchHistory(
                 user_id=admin.id,
@@ -328,7 +431,6 @@ def run_startup_demo_scraping():
 def run_manual_scraping(query: str = None):
     """
     Scraping manual desde el panel admin.
-    Recibe un query específico del usuario. NO usa DEMO_PRODUCTS.
     """
     from sqlalchemy import create_engine, select
     from sqlalchemy.orm import Session

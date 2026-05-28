@@ -26,7 +26,6 @@ async function apiFetch(path, options = {}) {
   const headers = { 'Content-Type': 'application/json', ...options.headers };
   if (Auth.getAccess()) headers['Authorization'] = `Bearer ${Auth.getAccess()}`;
 
-  // Timeout 10s — si el backend no responde, falla limpiamente
   const controller = new AbortController();
   const timeoutId  = setTimeout(() => controller.abort(), 30000);
 
@@ -47,39 +46,45 @@ async function apiFetch(path, options = {}) {
       headers['Authorization'] = `Bearer ${Auth.getAccess()}`;
       res = await fetch(`${API_BASE}${path}`, { ...options, headers });
     } else {
-      Auth.clear();
-      showScreen('landing');
-      showToast('Sesión expirada', 'Por favor inicia sesión de nuevo', true);
+      // Solo cerrar sesión si el servidor respondió, no si hubo error de red
+      if (navigator.onLine) {
+        Auth.clear();
+        showScreen('landing');
+        showToast('Sesión expirada', 'Por favor inicia sesión de nuevo', true);
+      }
       throw new Error('Session expired');
     }
   }
 
   if (!res.ok) {
     const err = await res.json().catch(() => ({ detail: 'Error de red' }));
-    // detail puede ser string o array de errores de validación Pydantic
     const detail = Array.isArray(err.detail)
       ? err.detail.map(e => e.msg || JSON.stringify(e)).join(', ')
       : err.detail || `HTTP ${res.status}`;
     throw new Error(detail);
   }
 
-  // 204 No Content no tiene body
   if (res.status === 204) return null;
   return res.json();
 }
 
 async function tryRefresh() {
   try {
-    const data = await fetch(`${API_BASE}/auth/refresh`, {
+    const res = await fetch(`${API_BASE}/auth/refresh`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ refresh_token: Auth.getRefresh() }),
-    }).then(r => r.json());
+    });
+    if (!res.ok) return false;
+    const data = await res.json();
     if (data.access_token) {
-      Auth.save(data.access_token, data.refresh_token);
+      Auth.save(data.access_token, data.refresh_token ?? Auth.getRefresh());
       return true;
     }
-  } catch (_) {}
+  } catch (_) {
+    // Conexión caída — no limpiar sesión, solo fallar silenciosamente
+    return false;
+  }
   return false;
 }
 
@@ -96,9 +101,6 @@ const ApiAuth = {
     return data;
   },
 
-  /* FIX: endpoint de registro agregado
-     El backend espera: name, email, password, role
-     Por defecto el rol es "analyst" (único rol permitido desde el registro público) */
   async register({ name, email, password, role = 'analyst' }) {
     const data = await apiFetch('/auth/register', {
       method: 'POST',
@@ -112,7 +114,6 @@ const ApiAuth = {
   },
 
   async logout() {
-    // Notificar al backend para registrar el evento (best-effort)
     try { await apiFetch('/auth/logout', { method: 'POST' }); } catch (_) {}
     Auth.clear();
   },
@@ -124,14 +125,13 @@ const ApiAuth = {
 const ApiScan = {
   /**
    * Manda la imagen al backend → regresa { task_id, status }
-   * Usa FormData porque es un archivo binario, no JSON.
    */
   async scanImage(file) {
     const form = new FormData();
     form.append('file', file);
 
     const controller = new AbortController();
-    const timeoutId  = setTimeout(() => controller.abort(), 30000); // 30s para imagen+IA
+    const timeoutId  = setTimeout(() => controller.abort(), 60000); // 60s para imagen+IA
     let res;
     try {
       res = await fetch(`${API_BASE}/scan`, {
@@ -157,11 +157,61 @@ const ApiScan = {
   /**
    * Polling del estado de la tarea.
    * Llama cada `intervalMs` ms hasta que status sea 'done' o 'error'.
-   * Llama onProgress(status) en cada tick.
+   * maxAttempts = 80 * 3000ms = 4 minutos máximo de espera.
    */
-  async pollResults(taskId, { onProgress, intervalMs = 2500, maxAttempts = 40 } = {}) {
+  async pollResults(taskId, { onProgress, intervalMs = 3000, maxAttempts = 80 } = {}) {
+    let consecutiveErrors = 0;
+    const MAX_CONSECUTIVE_ERRORS = 5;
+
     for (let i = 0; i < maxAttempts; i++) {
-      const data = await apiFetch(`/results/${taskId}`);
+      // Hacer el fetch directamente sin pasar por apiFetch para evitar
+      // que un 401 temporal mate la sesión y corte el polling
+      let res;
+      try {
+        res = await fetch(`${API_BASE}/results/${taskId}`, {
+          headers: { 'Authorization': `Bearer ${Auth.getAccess()}` },
+        });
+      } catch (_) {
+        // Error de red — reintentar
+        consecutiveErrors++;
+        if (consecutiveErrors >= MAX_CONSECUTIVE_ERRORS) {
+          throw new Error('Sin conexión con el servidor después de varios intentos.');
+        }
+        await new Promise(r => setTimeout(r, intervalMs));
+        continue;
+      }
+
+      // Si el token expiró durante el polling, refrescarlo y reintentar
+      if (res.status === 401) {
+        const refreshed = await tryRefresh();
+        if (refreshed) {
+          await new Promise(r => setTimeout(r, 500));
+          continue; // reintentar con el token nuevo
+        }
+        // Si no se pudo refrescar, esperar y reintentar de todas formas
+        // (el scraping puede terminar antes de que el token se recupere)
+        consecutiveErrors++;
+        if (consecutiveErrors >= MAX_CONSECUTIVE_ERRORS) {
+          Auth.clear();
+          showScreen('landing');
+          showToast('Sesión expirada', 'Por favor inicia sesión de nuevo', true);
+          throw new Error('Session expired');
+        }
+        await new Promise(r => setTimeout(r, intervalMs));
+        continue;
+      }
+
+      if (!res.ok) {
+        consecutiveErrors++;
+        if (consecutiveErrors >= MAX_CONSECUTIVE_ERRORS) {
+          throw new Error(`Error del servidor: HTTP ${res.status}`);
+        }
+        await new Promise(r => setTimeout(r, intervalMs));
+        continue;
+      }
+
+      consecutiveErrors = 0; // reset en éxito
+      const data = await res.json();
       onProgress?.(data.status);
 
       if (data.status === 'done')  return data;
@@ -169,7 +219,7 @@ const ApiScan = {
 
       await new Promise(r => setTimeout(r, intervalMs));
     }
-    throw new Error('Tiempo de espera agotado');
+    throw new Error('Tiempo de espera agotado. El scraping tardó demasiado.');
   },
 
   async searchByText(query) {
@@ -180,7 +230,6 @@ const ApiScan = {
     return apiFetch(`/history?page=${page}&limit=${limit}`);
   },
 
-  // Historial global: propias + scrapings del admin (visibles a todos)
   async getGlobalHistory(page = 1, limit = 20) {
     return apiFetch(`/history/global?page=${page}&limit=${limit}`);
   },
