@@ -105,7 +105,8 @@ class ActivityLog(Base, TimestampMixin):
 
     id: Mapped[int] = mapped_column(primary_key=True)
     event_type: Mapped[ActivityEventType] = mapped_column(
-        SAEnum(ActivityEventType), index=True
+    SAEnum(ActivityEventType, name="activityeventtype", create_type=False),
+    index=True
     )
     # Actor: usuario que generó el evento (puede ser None si es sistema)
     actor_id: Mapped[int | None] = mapped_column(

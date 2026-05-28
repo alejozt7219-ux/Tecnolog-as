@@ -1,75 +1,52 @@
 """add activity_logs table
 
-Revision ID: 0005
-Revises: 0004
+Revision ID: 0005_add_activity_logs
+Revises: 0004_add_is_custom_to_stores
 Create Date: 2026-05-28
 """
 from alembic import op
 import sqlalchemy as sa
+from sqlalchemy.dialects import postgresql
 
-revision = "0005"
-down_revision = "0004"
+revision = "0005_add_activity_logs"
+down_revision = "0004_add_is_custom_to_stores"
 branch_labels = None
 depends_on = None
 
-ACTIVITY_EVENT_TYPES = [
-    "scraping_scheduled_start",
-    "scraping_scheduled_end",
-    "scraping_manual_start",
-    "scraping_manual_end",
-    "user_registered",
-    "user_login",
-    "user_logout",
-    "user_deleted",
-    "store_deleted",
-    "user_search",
-]
-
 
 def upgrade() -> None:
-    op.execute(
-        sa.text(
-            "CREATE TYPE activityeventtype AS ENUM ("
-            + ", ".join(f"'{v}'" for v in ACTIVITY_EVENT_TYPES)
-            + ")"
+    op.execute(sa.text("""
+        DO $$ BEGIN
+            CREATE TYPE activityeventtype AS ENUM (
+                'scraping_scheduled_start', 'scraping_scheduled_end',
+                'scraping_manual_start', 'scraping_manual_end',
+                'user_registered', 'user_login', 'user_logout',
+                'user_deleted', 'store_deleted', 'user_search'
+            );
+        EXCEPTION WHEN duplicate_object THEN null;
+        END $$;
+    """))
+
+    op.execute(sa.text("""
+        CREATE TABLE IF NOT EXISTS activity_logs (
+            id          SERIAL PRIMARY KEY,
+            event_type  activityeventtype NOT NULL,
+            actor_id    INTEGER REFERENCES users(id) ON DELETE SET NULL,
+            actor_name  VARCHAR(100),
+            actor_role  VARCHAR(20),
+            detail      VARCHAR(500),
+            query       VARCHAR(500),
+            task_id     VARCHAR(255),
+            created_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
+            updated_at  TIMESTAMPTZ NOT NULL DEFAULT now()
         )
-    )
-    op.create_table(
-        "activity_logs",
-        sa.Column("id", sa.Integer, primary_key=True),
-        sa.Column(
-            "event_type",
-            sa.Enum(*ACTIVITY_EVENT_TYPES, name="activityeventtype", create_type=False),
-            nullable=False,
-            index=True,
-        ),
-        sa.Column(
-            "actor_id",
-            sa.Integer,
-            sa.ForeignKey("users.id", ondelete="SET NULL"),
-            nullable=True,
-        ),
-        sa.Column("actor_name", sa.String(100), nullable=True),
-        sa.Column("actor_role", sa.String(20), nullable=True),
-        sa.Column("detail", sa.String(500), nullable=True),
-        sa.Column("query", sa.String(500), nullable=True),
-        sa.Column("task_id", sa.String(255), nullable=True),
-        sa.Column(
-            "created_at",
-            sa.DateTime(timezone=True),
-            server_default=sa.func.now(),
-            nullable=False,
-        ),
-        sa.Column(
-            "updated_at",
-            sa.DateTime(timezone=True),
-            server_default=sa.func.now(),
-            onupdate=sa.func.now(),
-            nullable=False,
-        ),
-    )
+    """))
+
+    op.execute(sa.text(
+        "CREATE INDEX IF NOT EXISTS ix_activity_logs_event_type ON activity_logs (event_type)"
+    ))
 
 
 def downgrade() -> None:
-    op.drop_table("activity_logs")
-    op.execute("DROP TYPE activityeventtype")
+    op.execute(sa.text("DROP TABLE IF EXISTS activity_logs"))
+    op.execute(sa.text("DROP TYPE IF EXISTS activityeventtype"))
