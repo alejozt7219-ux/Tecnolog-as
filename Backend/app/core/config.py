@@ -1,4 +1,5 @@
 from pydantic_settings import BaseSettings
+from pydantic import field_validator
 from functools import lru_cache
 
 
@@ -11,8 +12,23 @@ class Settings(BaseSettings):
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 60
     REFRESH_TOKEN_EXPIRE_DAYS: int = 7
 
-    # CORS — en producción pon tus dominios separados por coma en el .env
+    # CORS — acepta string simple, lista JSON o separado por comas
     CORS_ORIGINS: list[str] = []
+
+    @field_validator("CORS_ORIGINS", mode="before")
+    @classmethod
+    def parse_cors(cls, v):
+        if isinstance(v, list):
+            return v
+        if isinstance(v, str):
+            v = v.strip()
+            if not v:
+                return []
+            if v.startswith("["):
+                import json
+                return json.loads(v)
+            return [i.strip() for i in v.split(",") if i.strip()]
+        return v
 
     # Database
     DATABASE_URL: str
