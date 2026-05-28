@@ -12,23 +12,8 @@ class Settings(BaseSettings):
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 60
     REFRESH_TOKEN_EXPIRE_DAYS: int = 7
 
-    # CORS — acepta string simple, lista JSON o separado por comas
-    CORS_ORIGINS: list[str] = []
-
-    @field_validator("CORS_ORIGINS", mode="before")
-    @classmethod
-    def parse_cors(cls, v):
-        if isinstance(v, list):
-            return v
-        if isinstance(v, str):
-            v = v.strip()
-            if not v:
-                return []
-            if v.startswith("["):
-                import json
-                return json.loads(v)
-            return [i.strip() for i in v.split(",") if i.strip()]
-        return v
+    # CORS — opcional, si no se define permite todo desde el middleware
+    CORS_ORIGINS: str = "*"
 
     # Database
     DATABASE_URL: str
@@ -38,8 +23,7 @@ class Settings(BaseSettings):
     def fix_db_url(cls, v):
         if not v or not isinstance(v, str) or not v.strip():
             raise ValueError(
-                "DATABASE_URL está vacío. Verifica que la variable esté configurada en Railway "
-                "y que la referencia ${{Postgres.DATABASE_PUBLIC_URL}} esté correctamente vinculada."
+                "DATABASE_URL está vacío. Verifica que la variable esté configurada en Railway."
             )
         v = v.strip()
         if v.startswith("postgres://"):
