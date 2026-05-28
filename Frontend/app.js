@@ -102,7 +102,9 @@ async function _scrapingNotifPoller() {
       );
       if (allUnseenAdmin.length > 1 && _pendingBatchTotal === 0) {
         allUnseenAdmin.forEach(h => _pendingBatchIds.add(h.task_id));
-        _pendingBatchLabel  = 'demo';
+        // 'scheduled' = scraping por horario configurado por admin
+        // 'startup'   = scraping predeterminado al iniciar la app
+        _pendingBatchLabel  = 'startup';
         _pendingBatchTotal  = allUnseenAdmin.length;
         _pendingBatchDone   = 0;
         _pendingBatchErrors = 0;
@@ -121,23 +123,22 @@ async function _scrapingNotifPoller() {
         const isAuto = !h.triggered_by_admin;
         const isBatchItem = _pendingBatchIds.has(h.task_id);
 
-        // Toast individual para todos — si es batch, muestra contador de progreso
-        const label = isBatchItem
-          ? (_pendingBatchLabel === 'demo' ? '🗓️ Scraping programado' : '🔄 Re-scraping')
-          : (isAuto ? '🤖 Scraping automático' : '🔍 Scraping');
-        if (isDone) {
-          const priceCount = h.product?.prices?.length || 0;
-          const progress = isBatchItem ? ` (${_pendingBatchDone + 1}/${_pendingBatchTotal})` : '';
-          showToast(
-            `${label}${progress}: ${productName}`,
-            `✅ Completado${priceCount ? ` · ${priceCount} precios` : ''}`
-          );
-        } else {
-          const progress = isBatchItem ? ` (${_pendingBatchDone + 1}/${_pendingBatchTotal})` : '';
-          showToast(`${label}${progress}: ${productName}`, '❌ Falló el scraping', true);
+        // Toast individual SOLO para ítems que NO son parte de un batch
+        // Los batch muestran únicamente el toast de resumen al final
+        const label = isAuto ? '🤖 Scraping automático' : '🔍 Scraping';
+        if (!isBatchItem) {
+          if (isDone) {
+            const priceCount = h.product?.prices?.length || 0;
+            showToast(
+              `${label}: ${productName}`,
+              `✅ Completado${priceCount ? ` · ${priceCount} precios` : ''}`
+            );
+          } else {
+            showToast(`${label}: ${productName}`, '❌ Falló el scraping', true);
+          }
         }
 
-        // Actividad reciente siempre
+        // Actividad reciente siempre (individual, para el historial)
         if (isDone) {
           _addRecentActivity(
             `${isAuto ? 'Scraping automático' : 'Scraping'}: ${productName}`,
@@ -159,10 +160,16 @@ async function _scrapingNotifPoller() {
           // Cuando termina el batch completo → UN solo toast de resumen
           if (_pendingBatchIds.size === 0 && _pendingBatchTotal > 0) {
             const ok  = _pendingBatchDone - _pendingBatchErrors;
-            const tag = _pendingBatchLabel === 'auto' ? '🤖 Scraping automático' : _pendingBatchLabel === 'demo' ? '🗓️ Scraping programado' : '🔄 Re-scraping';
+            // 'startup'   = scraping predeterminado al iniciar la app
+            // 'scheduled' = scraping por horario configurado por el admin
+            const tag = _pendingBatchLabel === 'scheduled'
+              ? '🗓️ Scraping programado'
+              : _pendingBatchLabel === 'startup'
+              ? '📦 Scraping inicial'
+              : '🤖 Scraping automático';
             showToast(
               `${tag} completado`,
-              `${ok}/${_pendingBatchTotal} productos actualizados${_pendingBatchErrors ? ` · ${_pendingBatchErrors} errores` : ' ✅'}`
+              `${ok}/${_pendingBatchTotal} productos analizados${_pendingBatchErrors ? ` · ${_pendingBatchErrors} errores` : ' ✅'}`
             );
             _addRecentActivity(
               `${tag} completado: ${ok}/${_pendingBatchTotal} productos`,
@@ -1043,10 +1050,8 @@ function _renderDashboardHistory(items) {
     </td>`;
     tbody.appendChild(btnRow);
     document.getElementById('btn-ver-mas-dashboard').addEventListener('click', function() {
-      const extras  = document.querySelectorAll('#page-dashboard .dashboard-extra');
-      const showing = extras[0] && extras[0].style.display !== 'none';
-      extras.forEach(r => r.style.display = showing ? 'none' : '');
-      this.textContent = showing ? `Ver más (${hidden.length})` : 'Ver menos';
+      document.querySelectorAll('#page-dashboard .dashboard-extra').forEach(r => r.style.display = '');
+      this.closest('tr').remove();
     });
   }
 }
@@ -1406,10 +1411,12 @@ function _renderScrapingHistory(items) {
   const tbody = document.getElementById('scraping-history-tbody');
   if (!tbody) return;
 
-  const VISIBLE = 5;
-  const visible = items.slice(0, VISIBLE);
-  const hidden  = items.slice(VISIBLE, VISIBLE + 10);
-  const all     = [...visible, ...hidden];
+  // Máximo 10 items en total: 5 visibles + 5 en "Ver más". Los más recientes van primero.
+  const MAX_TOTAL = 10;
+  const VISIBLE   = 5;
+  const all       = items.slice(0, MAX_TOTAL);
+  const visible   = all.slice(0, VISIBLE);
+  const hidden    = all.slice(VISIBLE);   // los 5 más antiguos del lote
 
   function rowHtml(item) {
     const sc = item.status === 'done' ? 's-green' : item.status === 'error' ? 's-red' : 's-yellow';
@@ -1426,42 +1433,29 @@ function _renderScrapingHistory(items) {
     `;
   }
 
-  // Actualizar filas existentes (por task_id) y agregar las nuevas —
-  // nunca borrar el tbody completo para no perder filas que el usuario tiene visibles.
-  const rendered = new Set();
+  // Reconstruir el tbody limpio cada vez para garantizar orden correcto
+  tbody.innerHTML = '';
 
-  all.forEach((item, idx) => {
-    const isHidden = idx >= VISIBLE;
-    let tr = tbody.querySelector(`tr[data-task="${item.task_id}"]`);
-    if (tr) {
-      // Fila ya existe: solo actualizar estado y datos del botón (puede haber cambiado de pending→done)
-      tr.innerHTML = rowHtml(item);
-      tr.querySelector('.link-btn').dataset.item = JSON.stringify(item);
-      if (isHidden && !tr.classList.contains('history-extra')) {
-        tr.classList.add('history-extra'); tr.style.display = 'none';
-      }
-    } else {
-      tr = document.createElement('tr');
-      tr.dataset.task = item.task_id;
-      if (isHidden) { tr.className = 'history-extra'; tr.style.display = 'none'; }
-      tr.innerHTML = rowHtml(item);
-      tr.querySelector('.link-btn').dataset.item = JSON.stringify(item);
-      // Insertar en la posición correcta (antes del botón ver-más si existe)
-      const verMasBtn = document.getElementById('scraping-ver-mas-btn');
-      tbody.insertBefore(tr, verMasBtn || null);
-    }
+  // Primero los visibles (más recientes), luego los ocultos (más antiguos)
+  visible.forEach(item => {
+    const tr = document.createElement('tr');
     tr.dataset.task = item.task_id;
-    rendered.add(item.task_id);
+    tr.innerHTML = rowHtml(item);
+    tr.querySelector('.link-btn').dataset.item = JSON.stringify(item);
+    tbody.appendChild(tr);
   });
 
-  // Quitar filas que ya no están en los resultados actuales
-  Array.from(tbody.querySelectorAll('tr[data-task]')).forEach(tr => {
-    if (!rendered.has(tr.dataset.task)) tr.remove();
+  hidden.forEach(item => {
+    const tr = document.createElement('tr');
+    tr.dataset.task = item.task_id;
+    tr.className = 'history-extra';
+    tr.style.display = 'none';
+    tr.innerHTML = rowHtml(item);
+    tr.querySelector('.link-btn').dataset.item = JSON.stringify(item);
+    tbody.appendChild(tr);
   });
 
-  // Botón "ver más"
-  const existing = document.getElementById('scraping-ver-mas-btn');
-  if (existing) existing.remove();
+  // Botón "Ver más" — sin toggle "Ver menos"
   if (hidden.length > 0) {
     const btnRow = document.createElement('tr');
     btnRow.id = 'scraping-ver-mas-btn';
@@ -1469,10 +1463,8 @@ function _renderScrapingHistory(items) {
     btnRow.innerHTML = '<td colspan="6" style="text-align:center;padding:10px 0"><button class="link-btn" id="btn-ver-mas-scraping" style="font-size:13px;padding:6px 18px;border:1px solid var(--border);border-radius:6px">Ver más (' + count + ')</button></td>';
     tbody.appendChild(btnRow);
     document.getElementById('btn-ver-mas-scraping').addEventListener('click', function() {
-      const extras = document.querySelectorAll('#scraping-history-tbody .history-extra');
-      const showing = extras[0] && extras[0].style.display !== 'none';
-      extras.forEach(r => r.style.display = showing ? 'none' : '');
-      this.textContent = showing ? 'Ver más (' + count + ')' : 'Ver menos';
+      document.querySelectorAll('#scraping-history-tbody .history-extra').forEach(r => r.style.display = '');
+      this.closest('tr').remove();   // quitar el botón al expandir
     });
   }
 }
@@ -1511,45 +1503,9 @@ function _addRecentActivity(desc, tipo, statusClass) {
   if (tbody) _renderActivityLog(tbody);
 }
 
-/* Renderiza _activityLog en el tbody del overview, al tope de las filas de BD.
-   Las filas en-memoria (_activityLog, ordenadas desc) se insertan encima de las de BD. */
-function _renderActivityLog(tbody) {
-  if (!tbody) return;
-  // Quitar filas en-memoria previas
-  Array.from(tbody.querySelectorAll('tr[data-mem]')).forEach(r => r.remove());
-  // Para que el más reciente quede arriba: iterar de más viejo a más reciente (reverse),
-  // cada uno se inserta con insertBefore(firstChild), empujando al anterior hacia abajo.
-  [..._activityLog].slice().reverse().forEach(item => {
-    const timeStr = new Date(item.ts).toLocaleString('es-CO');
-    const statusHtml = item.statusClass
-      ? `<span class="status-badge ${item.statusClass}">${item.statusClass === 's-green' ? 'Exitoso' : item.statusClass === 's-red' ? 'Error' : item.statusClass === 's-yellow' ? 'En proceso' : 'Aviso'}</span>`
-      : '<span style="color:var(--muted)">\u2014</span>';
-    const row = document.createElement('tr');
-    row.setAttribute('data-mem', '1');
-    row.innerHTML = `
-      <td><div class="act-icon"><svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg></div></td>
-      <td>${item.desc}</td>
-      <td style="color:var(--muted)">${item.tipo}</td>
-      <td style="color:var(--muted)"><time>${timeStr}</time></td>
-      <td>${statusHtml}</td>`;
-    tbody.insertBefore(row, tbody.firstChild);
-  });
-  // Garantizar que las filas visibles (data-mem + filas de BD sin .overview-extra) no superen 5
-  const visibleDbRows = Array.from(tbody.querySelectorAll('tr:not([data-mem]):not(.overview-extra)')).filter(r => r.id !== 'overview-ver-mas-btn');
-  const memRows = Array.from(tbody.querySelectorAll('tr[data-mem]'));
-  const totalVisible = memRows.length + visibleDbRows.length;
-  if (totalVisible > 5) {
-    // Ocultar filas de BD que sobran (las del fondo, que son las más viejas)
-    const toHide = visibleDbRows.slice(5 - memRows.length);
-    toHide.forEach(r => { r.classList.add('overview-extra'); r.style.display = 'none'; });
-    // Actualizar el contador del botón ver-más si existe
-    const btn = document.getElementById('btn-ver-mas-overview');
-    if (btn) {
-      const hiddenCount = tbody.querySelectorAll('.overview-extra').length;
-      btn.textContent = `Ver más (${hiddenCount})`;
-    }
-  }
-}
+/* _renderActivityLog — no-op: la tabla del overview se construye
+   completamente desde BD en _loadAdminOverview (máx 10 filas). */
+function _renderActivityLog(tbody) {}
 
 
 async function _loadAdminOverview() {
@@ -1599,27 +1555,27 @@ async function _loadAdminOverview() {
     // Actualizar tarjetas de scraping con historial real (sobreescribe data.scraping si hay datos frescos)
     if (logs?.length) _updateScrapingStatCards(logs);
 
-    // Tabla de actividad reciente — persistente desde BD
+    // Tabla de actividad reciente — máx 10 total: 5 visibles + 5 en "Ver más"
     const tbody = document.querySelector('#admin-page-overview .table-wrap tbody');
     if (tbody && logs?.length) {
       tbody.innerHTML = '';
+      const MAX_TOTAL     = 10;
       const VISIBLE_LIMIT = 5;
-      // Cuántas filas en-memoria van a inyectarse encima — reservar espacio para ellas
-      const memCount = Math.min(_activityLog.length, VISIBLE_LIMIT);
-      const dbVisible = Math.max(0, VISIBLE_LIMIT - memCount);
-      const overviewVisible = logs.slice(0, dbVisible);
-      const overviewHidden  = logs.slice(dbVisible);   // todo lo que no cabe va al ver-más
-      const renderOverviewRow = (item, hidden) => {
+      const allLogs       = logs.slice(0, MAX_TOTAL);   // los 10 más recientes
+      const visibleLogs   = allLogs.slice(0, VISIBLE_LIMIT);
+      const hiddenLogs    = allLogs.slice(VISIBLE_LIMIT);
+
+      const renderOverviewRow = (item, isHidden) => {
         const isHistory = 'query' in item;
         const sc = (isHistory ? item.status === 'done' : item.status === 'success') ? 's-green'
                  : (item.status === 'error') ? 's-red' : 's-yellow';
         const st = sc === 's-green' ? 'Exitoso' : sc === 's-red' ? 'Error' : 'En proceso';
         const desc = isHistory
-          ? (item.triggered_by_admin ? `Scraping predeterminado: ${item.query}` : `Búsqueda usuario: ${item.query}`)
+          ? (item.triggered_by_admin ? `Scraping: ${item.query}` : `Búsqueda usuario: ${item.query}`)
           : `Scraping automático completado`;
         const dateStr = new Date(item.created_at).toLocaleString('es-CO');
         const tr = document.createElement('tr');
-        if (hidden) { tr.className = 'overview-extra'; tr.style.display = 'none'; }
+        if (isHidden) { tr.className = 'overview-extra'; tr.style.display = 'none'; }
         tr.innerHTML = `
           <td><div class="act-icon" aria-hidden="true"><svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg></div></td>
           <td>${desc}</td>
@@ -1628,37 +1584,21 @@ async function _loadAdminOverview() {
           <td><span class="status-badge ${sc}">${st}</span></td>`;
         tbody.appendChild(tr);
       };
-      overviewVisible.forEach(item => renderOverviewRow(item, false));
-      overviewHidden.forEach(item  => renderOverviewRow(item, true));
-      // Detectar scraping automático reciente y añadirlo al log en memoria
-      const autoItems = logs.filter(h => !h.triggered_by_admin && 'query' in h);
-      autoItems.slice(0, 3).forEach(h => {
-        const key = `auto-${h.id || h.created_at}`;
-        if (!_activityLog.find(a => a._key === key)) {
-          const entry = { desc: `Scraping automático: ${h.query}`, tipo: 'Automático',
-            statusClass: h.status === 'done' ? 's-green' : h.status === 'error' ? 's-red' : 's-yellow',
-            ts: new Date(h.created_at).getTime(), _key: key };
-          _activityLog.push(entry);
-        }
-      });
-      _activityLog.sort((a, b) => b.ts - a.ts);
-      if (_activityLog.length > 20) _activityLog.length = 20;
-      // Inyectar eventos en-memoria al tope (ya tienen espacio reservado)
-      _renderActivityLog(tbody);
-      // Botón ver más — siempre al final
-      const existingOvBtn = document.getElementById('overview-ver-mas-btn');
-      if (existingOvBtn) existingOvBtn.remove();
-      if (overviewHidden.length > 0) {
-        const count = overviewHidden.length;
+
+      // Visibles primero (más recientes), luego ocultos (más antiguos dentro del lote)
+      visibleLogs.forEach(item => renderOverviewRow(item, false));
+      hiddenLogs.forEach(item  => renderOverviewRow(item, true));
+
+      // Botón "Ver más" — sin toggle, al expandir desaparece
+      if (hiddenLogs.length > 0) {
+        const count = hiddenLogs.length;
         const btnRow = document.createElement('tr');
         btnRow.id = 'overview-ver-mas-btn';
         btnRow.innerHTML = '<td colspan="5" style="text-align:center;padding:10px 0"><button class="link-btn" id="btn-ver-mas-overview" style="font-size:13px;padding:6px 18px;border:1px solid var(--border);border-radius:6px">Ver más (' + count + ')</button></td>';
         tbody.appendChild(btnRow);
         document.getElementById('btn-ver-mas-overview').addEventListener('click', function() {
-          const extras = document.querySelectorAll('#admin-page-overview .table-wrap tbody .overview-extra');
-          const showing = extras[0] && extras[0].style.display !== 'none';
-          extras.forEach(r => r.style.display = showing ? 'none' : '');
-          this.textContent = showing ? 'Ver más (' + count + ')' : 'Ver menos';
+          document.querySelectorAll('#admin-page-overview .table-wrap tbody .overview-extra').forEach(r => r.style.display = '');
+          this.closest('tr').remove();   // quitar el botón al expandir
         });
       }
     }
@@ -1849,7 +1789,7 @@ async function rerunDemoScraping() {
   // Refrescar tabla inmediatamente para mostrar los nuevos items en "En proceso"
   setTimeout(() => _loadAdminScraping(), 1000);
   // Arrancar polling que actualiza la tabla y notifica cuando todo termina
-  _trackScrapingBatch(taskIds, 'demo');
+  _trackScrapingBatch(taskIds, 'startup');
   _startScrapingTablePolling(taskIds);
 }
 

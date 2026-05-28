@@ -30,7 +30,7 @@ services:
     build:
       context: ./Backend
       dockerfile: Dockerfile
-    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+    command: sh -c "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload"
     ports:
       - "8000:8000"
     env_file: ./Backend/.env
@@ -41,6 +41,7 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+    restart: on-failure
 
   worker:
     build:
@@ -55,6 +56,7 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+    restart: on-failure
 
   beat:
     build:
@@ -66,6 +68,7 @@ services:
       - ./Backend:/app
     depends_on:
       - redis
+    restart: on-failure
 
   flower:
     build:
@@ -77,6 +80,17 @@ services:
     env_file: ./Backend/.env
     depends_on:
       - redis
+    restart: on-failure
+
+  frontend:
+    build:
+      context: ./Frontend
+      dockerfile: Dockerfile
+    ports:
+      - "3000:80"
+    depends_on:
+      - api
+    restart: on-failure
 
 volumes:
   postgres_data:

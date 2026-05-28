@@ -4,7 +4,7 @@
    Importado antes de app.js en index.html.
    ═══════════════════════════════════════════════ */
 
-const API_BASE = 'https://tecnolog-as-production.up.railway.app';
+const API_BASE = 'http://localhost:8000';
 
 /* ── Token storage ─────────────────────────────── */
 const Auth = {
@@ -225,8 +225,8 @@ const ApiAdmin = {
   async getScrapingLogs(page = 1) {
     return apiFetch(`/admin/scraping/logs?page=${page}`);
   },
-  async getScrapingHistory(page = 1) {
-    return apiFetch(`/admin/scraping/history?page=${page}`);
+  async getScrapingHistory(page = 1, limit = 10) {
+    return apiFetch(`/admin/scraping/history?page=${page}&limit=${limit}`);
   },
   async getScrapingSchedule() {
     return apiFetch('/admin/scraping/schedule');
