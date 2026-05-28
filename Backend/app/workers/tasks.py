@@ -193,7 +193,7 @@ def run_daily_scraping():
         # Buscar el primer admin activo para asociar el historial
         admin = db.execute(
             select(User).where(User.role == UserRole.admin, User.is_active == True)
-        ).scalar_one_or_none()
+        ).scalars().first()
 
         if not admin:
             logger.warning("[Daily] No hay admin activo para asociar el historial. Abortando.")
@@ -247,7 +247,7 @@ def run_startup_demo_scraping():
     with Session(engine) as db:
         admin = db.execute(
             select(User).where(User.role == UserRole.admin, User.is_active == True)
-        ).scalar_one_or_none()
+        ).scalars().first()
 
         if not admin:
             logger.warning("[Startup] No hay admin activo para asociar los demos.")
@@ -312,7 +312,7 @@ def run_manual_scraping(query: str = None):
     with Session(engine) as db:
         admin = db.execute(
             select(User).where(User.role == UserRole.admin, User.is_active == True)
-        ).scalar_one_or_none()
+        ).scalars().first()
 
         if not admin:
             logger.warning("[Manual] No hay admin activo.")
