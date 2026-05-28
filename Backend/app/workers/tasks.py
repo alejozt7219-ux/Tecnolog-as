@@ -164,26 +164,58 @@ def scrape_product(self, task_id: str, query: str, search_history_id):
 
 @celery_app.task(name="app.workers.tasks.run_daily_scraping")
 def run_daily_scraping():
-    """Scraping diario de todos los productos existentes, respetando tiendas activas."""
+    """
+    Scraping diario de todos los productos existentes.
+    Crea un SearchHistory por producto con triggered_by_admin=True
+    para que aparezcan en el historial de scraping del panel admin.
+    """
     from sqlalchemy import create_engine, select
     from sqlalchemy.orm import Session
-    from app.models.product import Product
+    from app.models.product import Product, SearchHistory, TaskStatus
+    from app.models.user import User, UserRole
     from app.core.config import settings
+    import uuid
 
     sync_url = settings.DATABASE_URL.replace("postgresql+asyncpg://", "postgresql+psycopg2://")
     engine = create_engine(sync_url)
 
     with Session(engine) as db:
+        # Buscar el primer admin activo para asociar el historial
+        admin = db.execute(
+            select(User).where(User.role == UserRole.admin, User.is_active == True)
+        ).scalar_one_or_none()
+
+        if not admin:
+            logger.warning("[Daily] No hay admin activo para asociar el historial. Abortando.")
+            engine.dispose()
+            return
+
         products = db.execute(select(Product)).scalars().all()
 
-    for product in products:
-        scrape_product.delay(
-            task_id=f"daily-{product.id}",
-            query=product.normalized_name,
-            search_history_id=None,
-        )
-    logger.info(f"[Daily] Scraping lanzado para {len(products)} productos.")
+        launched = []
+        for product in products:
+            task_id = str(uuid.uuid4())
+            history = SearchHistory(
+                user_id=admin.id,
+                task_id=task_id,
+                query=product.name,
+                status=TaskStatus.pending,
+                triggered_by_admin=True,
+            )
+            db.add(history)
+            db.flush()
+            scrape_product.delay(
+                task_id=task_id,
+                query=product.name,
+                search_history_id=history.id,
+            )
+            launched.append(product.name)
+
+        db.commit()
+
+    logger.info(f"[Daily] Scraping programado lanzado para {len(launched)} productos: {launched}")
     engine.dispose()
+    return {"launched": launched}
 
 
 @celery_app.task(name="app.workers.tasks.run_startup_demo_scraping")

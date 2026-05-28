@@ -39,10 +39,22 @@ async def register(body: UserCreate, db: AsyncSession = Depends(get_db)):
     await db.commit()
     await db.refresh(user)
 
-    # Si es el primer admin, disparar scraping de productos predeterminados
+    # FIX: Si es el primer admin, disparar el scraping demo UNA SOLA VEZ.
+    # Se usa un lock Redis (SET NX) para evitar el doble disparo si el beat
+    # schedule o cualquier otra fuente ya lo ejecutó en las últimas 24 h.
     if is_first_admin:
-        from app.workers.tasks import run_startup_demo_scraping
-        run_startup_demo_scraping.delay()
+        try:
+            import redis as _redis
+            from app.core.config import settings as _settings
+            _r = _redis.from_url(_settings.REDIS_URL, decode_responses=True)
+            # SET NX: retorna True solo si la clave no existía → ganamos el lock
+            if _r.set("pricevision:startup_demo_fired", "1", nx=True, ex=86400):
+                from app.workers.tasks import run_startup_demo_scraping
+                run_startup_demo_scraping.delay()
+        except Exception:
+            # Si Redis no está disponible, disparar igual (mejor que no disparar)
+            from app.workers.tasks import run_startup_demo_scraping
+            run_startup_demo_scraping.delay()
 
     return user
 
@@ -64,7 +76,6 @@ async def login(body: LoginRequest, db: AsyncSession = Depends(get_db)):
         access_token=create_access_token({"sub": str(user.id), "role": user.role}),
         refresh_token=create_refresh_token({"sub": str(user.id)}),
     )
-    
 
 
 @router.post("/refresh", response_model=TokenResponse)

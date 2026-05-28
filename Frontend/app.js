@@ -30,6 +30,7 @@ let _pendingBatchLabel   = '';          // 'auto' | 'manual' | 'demo'
 let _pendingBatchTotal   = 0;
 let _pendingBatchDone    = 0;
 let _pendingBatchErrors  = 0;
+let _pollerInitialized   = false;       // true después del primer tick (seed)
 
 function _startScrapingNotifPoller() {
   if (_scrapingNotifTimer) return;   // ya corriendo
@@ -38,6 +39,13 @@ function _startScrapingNotifPoller() {
 
 function _stopScrapingNotifPoller() {
   if (_scrapingNotifTimer) { clearTimeout(_scrapingNotifTimer); _scrapingNotifTimer = null; }
+  // Resetear el flag de inicializacion para que el proximo login vuelva a hacer seed
+  _pollerInitialized  = false;
+  _notifiedTaskIds    = new Set();
+  _pendingBatchIds    = new Set();
+  _pendingBatchTotal  = 0;
+  _pendingBatchDone   = 0;
+  _pendingBatchErrors = 0;
 }
 
 async function _scrapingNotifPoller() {
@@ -47,20 +55,59 @@ async function _scrapingNotifPoller() {
 
     const history = await ApiAdmin.getScrapingHistory(1).catch(() => null);
     if (history && history.length) {
+      // ── Bug 1 fix: primer tick — seed silencioso ──────────────────────────
+      // Pre-populamos _notifiedTaskIds con todos los task_ids ya terminados
+      // que existen en la BD al momento del login. Así el poller solo notifica
+      // los que lleguen *después* de que el admin inició sesión.
+      if (!_pollerInitialized) {
+        _pollerInitialized = true;
+        history.forEach(h => {
+          if (h.status === 'done' || h.status === 'error') {
+            _notifiedTaskIds.add(h.task_id);
+          }
+        });
+        // Refrescar UI una vez y salir — sin toasts ni actividad
+        _updateScrapingStatCards(history);
+        const p0 = document.querySelector('.admin-page.active')?.id;
+        if (p0 === 'admin-page-scraping') _renderScrapingHistory(history);
+        // Programar siguiente tick y salir
+        if (currentUser && currentUser.role === 'admin') {
+          _scrapingNotifTimer = setTimeout(_scrapingNotifPoller, 8000);
+        }
+        return;
+      }
+      // ─────────────────────────────────────────────────────────────────────
+
       // Buscar items recientes (últimos 10 min) no notificados aún
       const cutoff = Date.now() - 10 * 60 * 1000;
       const recent = history.filter(h => new Date(h.created_at).getTime() > cutoff);
 
-      // Refrescar UI en vivo en cada tick (actualiza tablas y stat cards sin importar en qué sección estés)
+      // Refrescar UI en vivo en cada tick
       _updateScrapingStatCards(history);
       const currentAdminPage = document.querySelector('.admin-page.active')?.id;
       if (currentAdminPage === 'admin-page-scraping') {
         _renderScrapingHistory(history);
       } else if (currentAdminPage === 'admin-page-overview') {
-        // Re-renderizar actividad reciente con datos frescos
         const tbody = document.querySelector('#admin-page-overview .table-wrap tbody');
         if (tbody) _renderActivityLog(tbody);
       }
+
+      // ── Detectar batch triggered_by_admin automáticamente ────────────
+      // Incluye pending+done+error → el total se conoce desde el primer tick
+      // y los toasts individuales van apareciendo producto a producto.
+      const allUnseenAdmin = recent.filter(h =>
+        h.triggered_by_admin &&
+        !_notifiedTaskIds.has(h.task_id) &&
+        !_pendingBatchIds.has(h.task_id)
+      );
+      if (allUnseenAdmin.length > 1 && _pendingBatchTotal === 0) {
+        allUnseenAdmin.forEach(h => _pendingBatchIds.add(h.task_id));
+        _pendingBatchLabel  = 'demo';
+        _pendingBatchTotal  = allUnseenAdmin.length;
+        _pendingBatchDone   = 0;
+        _pendingBatchErrors = 0;
+      }
+      // ─────────────────────────────────────────────────────────────────────
 
       for (const h of recent) {
         if (_notifiedTaskIds.has(h.task_id)) continue;
@@ -74,18 +121,20 @@ async function _scrapingNotifPoller() {
         const isAuto = !h.triggered_by_admin;
         const isBatchItem = _pendingBatchIds.has(h.task_id);
 
-        // Solo toast individual si NO es parte de un batch
-        if (!isBatchItem) {
-          const label = isAuto ? '🤖 Scraping automático' : '🔍 Scraping';
-          if (isDone) {
-            const priceCount = h.product?.prices?.length || 0;
-            showToast(
-              `${label}: ${productName}`,
-              `✅ Completado${priceCount ? ` · ${priceCount} precios encontrados` : ''}`
-            );
-          } else {
-            showToast(`${label}: ${productName}`, '❌ Falló el scraping', true);
-          }
+        // Toast individual para todos — si es batch, muestra contador de progreso
+        const label = isBatchItem
+          ? (_pendingBatchLabel === 'demo' ? '🗓️ Scraping programado' : '🔄 Re-scraping')
+          : (isAuto ? '🤖 Scraping automático' : '🔍 Scraping');
+        if (isDone) {
+          const priceCount = h.product?.prices?.length || 0;
+          const progress = isBatchItem ? ` (${_pendingBatchDone + 1}/${_pendingBatchTotal})` : '';
+          showToast(
+            `${label}${progress}: ${productName}`,
+            `✅ Completado${priceCount ? ` · ${priceCount} precios` : ''}`
+          );
+        } else {
+          const progress = isBatchItem ? ` (${_pendingBatchDone + 1}/${_pendingBatchTotal})` : '';
+          showToast(`${label}${progress}: ${productName}`, '❌ Falló el scraping', true);
         }
 
         // Actividad reciente siempre
@@ -110,7 +159,7 @@ async function _scrapingNotifPoller() {
           // Cuando termina el batch completo → UN solo toast de resumen
           if (_pendingBatchIds.size === 0 && _pendingBatchTotal > 0) {
             const ok  = _pendingBatchDone - _pendingBatchErrors;
-            const tag = _pendingBatchLabel === 'auto' ? '🤖 Scraping automático' : '🔄 Re-scraping';
+            const tag = _pendingBatchLabel === 'auto' ? '🤖 Scraping automático' : _pendingBatchLabel === 'demo' ? '🗓️ Scraping programado' : '🔄 Re-scraping';
             showToast(
               `${tag} completado`,
               `${ok}/${_pendingBatchTotal} productos actualizados${_pendingBatchErrors ? ` · ${_pendingBatchErrors} errores` : ' ✅'}`
@@ -1372,20 +1421,18 @@ function _updateScrapingStatCards(history) {
 function _renderScrapingHistory(items) {
   const tbody = document.getElementById('scraping-history-tbody');
   if (!tbody) return;
-  tbody.innerHTML = '';
 
   const VISIBLE = 5;
   const visible = items.slice(0, VISIBLE);
   const hidden  = items.slice(VISIBLE, VISIBLE + 10);
+  const all     = [...visible, ...hidden];
 
-  function makeRow(item, hidden) {
-    const tr = document.createElement('tr');
-    if (hidden) { tr.className = 'history-extra'; tr.style.display = 'none'; }
+  function rowHtml(item) {
     const sc = item.status === 'done' ? 's-green' : item.status === 'error' ? 's-red' : 's-yellow';
     const st = item.status === 'done' ? 'Completado' : item.status === 'error' ? 'Error' : 'En proceso';
     const dateStr = new Date(item.created_at).toLocaleString('es-CO');
-    const source = item.triggered_by_admin ? 'Admin' : 'Usuario';
-    tr.innerHTML = `
+    const source  = item.triggered_by_admin ? 'Admin' : 'Usuario';
+    return `
       <td><time>${dateStr}</time></td>
       <td><span class="status-badge ${sc}">${st}</span></td>
       <td style="color:var(--muted);max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${item.query || '—'}</td>
@@ -1393,14 +1440,42 @@ function _renderScrapingHistory(items) {
       <td style="color:var(--muted);font-size:11px">${source}</td>
       <td><button class="link-btn" onclick="openScrapingResultModal(this)">Ver</button></td>
     `;
-    // Guardar datos del item en el botón para recuperarlos en el modal
-    tr.querySelector('.link-btn').dataset.item = JSON.stringify(item);
-    tbody.appendChild(tr);
   }
 
-  visible.forEach(item => makeRow(item, false));
-  hidden.forEach(item  => makeRow(item, true));
+  // Actualizar filas existentes (por task_id) y agregar las nuevas —
+  // nunca borrar el tbody completo para no perder filas que el usuario tiene visibles.
+  const rendered = new Set();
 
+  all.forEach((item, idx) => {
+    const isHidden = idx >= VISIBLE;
+    let tr = tbody.querySelector(`tr[data-task="${item.task_id}"]`);
+    if (tr) {
+      // Fila ya existe: solo actualizar estado y datos del botón (puede haber cambiado de pending→done)
+      tr.innerHTML = rowHtml(item);
+      tr.querySelector('.link-btn').dataset.item = JSON.stringify(item);
+      if (isHidden && !tr.classList.contains('history-extra')) {
+        tr.classList.add('history-extra'); tr.style.display = 'none';
+      }
+    } else {
+      tr = document.createElement('tr');
+      tr.dataset.task = item.task_id;
+      if (isHidden) { tr.className = 'history-extra'; tr.style.display = 'none'; }
+      tr.innerHTML = rowHtml(item);
+      tr.querySelector('.link-btn').dataset.item = JSON.stringify(item);
+      // Insertar en la posición correcta (antes del botón ver-más si existe)
+      const verMasBtn = document.getElementById('scraping-ver-mas-btn');
+      tbody.insertBefore(tr, verMasBtn || null);
+    }
+    tr.dataset.task = item.task_id;
+    rendered.add(item.task_id);
+  });
+
+  // Quitar filas que ya no están en los resultados actuales
+  Array.from(tbody.querySelectorAll('tr[data-task]')).forEach(tr => {
+    if (!rendered.has(tr.dataset.task)) tr.remove();
+  });
+
+  // Botón "ver más"
   const existing = document.getElementById('scraping-ver-mas-btn');
   if (existing) existing.remove();
   if (hidden.length > 0) {
@@ -3018,7 +3093,7 @@ function ctpStep(unit, dir) {
   if (unit === 'h') {
     window._ctpH = ((window._ctpH - 1 + dir + 12) % 12) + 1;
   } else {
-    window._ctpM = (window._ctpM + dir * 5 + 60) % 60;
+    window._ctpM = (window._ctpM + dir + 60) % 60;
   }
   _ctpRender();
 }

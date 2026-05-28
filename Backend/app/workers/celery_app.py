@@ -1,5 +1,4 @@
 from celery import Celery
-from celery.schedules import crontab
 from app.core.config import settings
 
 celery_app = Celery(
@@ -8,18 +7,6 @@ celery_app = Celery(
     backend=settings.CELERY_RESULT_BACKEND,
     include=["app.workers.tasks"],
 )
-
-def _load_schedule_from_redis():
-    """Lee el schedule guardado en Redis. Devuelve defaults si no hay nada."""
-    try:
-        import redis, json
-        r = redis.from_url(settings.REDIS_URL, decode_responses=True)
-        raw = r.get("pricevision:scraping_schedule")
-        if raw:
-            return json.loads(raw)
-    except Exception:
-        pass
-    return {"frequency": "daily", "hour": 8, "minute": 30, "enabled": True}
 
 
 celery_app.conf.update(
@@ -34,41 +21,18 @@ celery_app.conf.update(
     broker_connection_retry_on_startup=True,
     # Usar nuestro scheduler personalizado que lee Redis en cada tick
     beat_scheduler="app.workers.redis_scheduler:RedisAwareScheduler",
-    beat_schedule={
-        # Startup demo: corre una vez al día a las 00:01 para mantener datos frescos
-        "startup-demo-daily": {
-            "task": "app.workers.tasks.run_startup_demo_scraping",
-            "schedule": crontab(hour=0, minute=1),
-        },
-    },
+    # FIX: No definir ningún beat_schedule estático aquí.
+    # El RedisAwareScheduler construye la entrada "daily-scraping" dinámicamente
+    # leyendo Redis, y por defecto lo arranca DESACTIVADO (enabled: false).
+    # El admin lo activa explícitamente desde el panel → /admin/scraping/schedule
+    beat_schedule={},
 )
 
-
-@celery_app.on_after_finalize.connect
-def setup_periodic_tasks(sender, **kwargs):
-    """
-    Lanza el scraping de demos al iniciar, pero solo UNA vez aunque
-    arranquen múltiples procesos (worker, beat, flower).
-    Usa un lock de Redis con TTL de 60s para garantizarlo.
-    """
-    import logging
-    import redis as redis_lib
-
-    logger = logging.getLogger(__name__)
-
-    LOCK_KEY = "pricevision:startup_scraping_lock"
-    LOCK_TTL = 60  # segundos — suficiente para que el countdown=15 ya haya encolado
-
-    try:
-        r = redis_lib.from_url(settings.REDIS_URL, decode_responses=True)
-        # SET NX (solo escribe si NO existe) + EX (expira en TTL segundos)
-        acquired = r.set(LOCK_KEY, "1", nx=True, ex=LOCK_TTL)
-        if not acquired:
-            logger.info("[Celery] Startup demo ya fue programado por otro proceso, omitiendo.")
-            return
-
-        from app.workers.tasks import run_startup_demo_scraping
-        run_startup_demo_scraping.apply_async(countdown=15)
-        logger.info("[Celery] Startup demo scraping programado en 15s.")
-    except Exception as e:
-        logger.warning(f"[Celery] No se pudo programar startup demo: {e}")
+# ─── Notas sobre el arranque del demo ───────────────────────────────────────
+# El scraping inicial de los 5 productos demo se dispara desde auth.py cuando
+# se registra el primer admin, con un lock Redis (SET NX) que garantiza que
+# solo ocurre una vez, evitando el doble disparo con el beat schedule.
+#
+# El scraping diario (run_daily_scraping) NO se ejecuta automáticamente hasta
+# que el admin lo active desde el panel de configuración de schedule.
+# Esto evita errores en entornos de desarrollo o despliegues sin scrapers listos.

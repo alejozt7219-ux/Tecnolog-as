@@ -337,7 +337,9 @@ async def fix_default_stores(
 # ── Scraping Schedule ─────────────────────────────────
 
 SCHEDULE_REDIS_KEY = "pricevision:scraping_schedule"
-SCHEDULE_DEFAULT   = {"frequency": "daily", "hour": 8, "minute": 30, "enabled": True}
+# FIX: enabled False por defecto → el scraping automático no corre hasta
+# que el admin lo active explícitamente desde el panel.
+SCHEDULE_DEFAULT   = {"frequency": "daily", "hour": 8, "minute": 30, "enabled": False}
 
 def _get_redis():
     import redis as redis_lib
@@ -394,20 +396,20 @@ async def update_scraping_schedule(
 
     _apply_beat_schedule(payload.hour, payload.minute, payload.enabled)
 
-    # Si la hora configurada es ahora o en los próximos 2 minutos, disparar YA
-    # (el crontab pierde el disparo si el beat no lo tenía cargado antes del minuto exacto)
+    # FIX: Si la hora configurada coincide con "ahora ± 2 min", disparar
+    # run_daily_scraping (no run_startup_demo_scraping — ese era el bug original).
     if payload.enabled and payload.frequency != "disabled":
-        from datetime import datetime, timezone
+        from datetime import datetime
         import pytz
         bogota = pytz.timezone("America/Bogota")
         now = datetime.now(bogota)
-        target_minutes = payload.hour * 60 + payload.minute
+        target_minutes  = payload.hour * 60 + payload.minute
         current_minutes = now.hour * 60 + now.minute
         diff = target_minutes - current_minutes
         if -1 <= diff <= 2:  # entre 1 min antes y 2 min después
             try:
-                from app.workers.tasks import run_startup_demo_scraping
-                run_startup_demo_scraping.delay()
+                from app.workers.tasks import run_daily_scraping  # FIX: era run_startup_demo_scraping
+                run_daily_scraping.delay()
             except Exception as e:
                 import logging
                 logging.getLogger(__name__).warning(f"[Schedule] No se pudo disparar tarea inmediata: {e}")

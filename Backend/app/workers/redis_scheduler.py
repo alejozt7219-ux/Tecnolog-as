@@ -1,6 +1,9 @@
 """
 RedisAwareScheduler — Celery Beat scheduler que re-lee el schedule
 configurado por el admin desde Redis en cada ciclo (~30s).
+
+FIX: El schedule diario arranca DESACTIVADO por defecto (enabled: false).
+El admin debe activarlo explícitamente desde /admin/scraping/schedule.
 """
 import json
 import logging
@@ -12,6 +15,10 @@ logger = logging.getLogger(__name__)
 SCHEDULE_REDIS_KEY = "pricevision:scraping_schedule"
 DAILY_TASK         = "app.workers.tasks.run_daily_scraping"
 DAILY_ENTRY_NAME   = "daily-scraping"
+
+# FIX: enabled: False por defecto → el scraping automático no corre hasta
+# que el admin lo active explícitamente desde el panel.
+SCHEDULE_DEFAULT = {"frequency": "daily", "hour": 8, "minute": 30, "enabled": False}
 
 
 class RedisAwareScheduler(PersistentScheduler):
@@ -30,7 +37,8 @@ class RedisAwareScheduler(PersistentScheduler):
                 return json.loads(raw)
         except Exception as e:
             logger.debug(f"[RedisScheduler] No se pudo leer Redis: {e}")
-        return {"frequency": "daily", "hour": 8, "minute": 30, "enabled": True}
+        # FIX: si no hay nada en Redis, el default es DESACTIVADO
+        return SCHEDULE_DEFAULT
 
     def tick(self, *args, **kwargs):
         import time
@@ -47,7 +55,7 @@ class RedisAwareScheduler(PersistentScheduler):
             return
         self._last_sched_hash = sched_hash
 
-        enabled = sched.get("enabled", True) and sched.get("frequency") != "disabled"
+        enabled = sched.get("enabled", False) and sched.get("frequency") != "disabled"
         hour    = int(sched.get("hour",   8))
         minute  = int(sched.get("minute", 30))
 
@@ -62,7 +70,7 @@ class RedisAwareScheduler(PersistentScheduler):
                 app      = self.app,
             )
             self.data[DAILY_ENTRY_NAME] = entry
-            logger.info(f"[RedisScheduler] Schedule actualizado → {hour:02d}:{minute:02d} daily")
+            logger.info(f"[RedisScheduler] Schedule activado → {hour:02d}:{minute:02d} daily")
         else:
             if DAILY_ENTRY_NAME in self.data:
                 del self.data[DAILY_ENTRY_NAME]

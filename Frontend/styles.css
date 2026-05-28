@@ -2108,6 +2108,9 @@ tbody tr:hover { background: var(--bg3); }
 }
 
 /* ── Analyze button states ── */
+#preview-state {
+  padding-bottom: 24px;
+}
 .btn-analyze {
   width: 100%;
   padding: 14px;
@@ -2126,6 +2129,7 @@ tbody tr:hover { background: var(--bg3); }
   color: #fff;
   position: relative;
   overflow: hidden;
+  margin-top: 16px;
 }
 .btn-analyze:hover:not(:disabled) { background: var(--accent3); transform: translateY(-1px); }
 .btn-analyze:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
