@@ -4,7 +4,7 @@
    Importado antes de app.js en index.html.
    ═══════════════════════════════════════════════ */
 
-const API_BASE = 'tecnolog-as-production.up.railway.app';
+const API_BASE = 'https://tecnolog-as-production.up.railway.app';
 
 /* ── Token storage ─────────────────────────────── */
 const Auth = {
