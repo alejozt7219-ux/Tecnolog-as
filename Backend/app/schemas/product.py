@@ -8,6 +8,7 @@ class StoreOut(BaseModel):
     name: str
     base_url: str
     is_active: bool
+    is_custom: bool
     logo_url: str | None
 
     model_config = {"from_attributes": True}
@@ -17,6 +18,7 @@ class StoreCreate(BaseModel):
     name: str
     base_url: str
     logo_url: str | None = None
+    is_custom: bool = True  # las tiendas creadas por admin siempre son personalizadas
 
 
 class PriceResultOut(BaseModel):

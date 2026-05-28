@@ -19,6 +19,7 @@ class Store(Base, TimestampMixin):
     name: Mapped[str] = mapped_column(String(100), unique=True)
     base_url: Mapped[str] = mapped_column(String(255))
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    is_custom: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
     logo_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
 
     prices = relationship("PriceResult", back_populates="store")

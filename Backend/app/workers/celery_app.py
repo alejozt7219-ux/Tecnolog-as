@@ -46,10 +46,27 @@ celery_app.conf.update(
 
 @celery_app.on_after_finalize.connect
 def setup_periodic_tasks(sender, **kwargs):
-    """Lanza el scraping de demos al iniciar el worker por primera vez."""
+    """
+    Lanza el scraping de demos al iniciar, pero solo UNA vez aunque
+    arranquen múltiples procesos (worker, beat, flower).
+    Usa un lock de Redis con TTL de 60s para garantizarlo.
+    """
     import logging
+    import redis as redis_lib
+
     logger = logging.getLogger(__name__)
+
+    LOCK_KEY = "pricevision:startup_scraping_lock"
+    LOCK_TTL = 60  # segundos — suficiente para que el countdown=15 ya haya encolado
+
     try:
+        r = redis_lib.from_url(settings.REDIS_URL, decode_responses=True)
+        # SET NX (solo escribe si NO existe) + EX (expira en TTL segundos)
+        acquired = r.set(LOCK_KEY, "1", nx=True, ex=LOCK_TTL)
+        if not acquired:
+            logger.info("[Celery] Startup demo ya fue programado por otro proceso, omitiendo.")
+            return
+
         from app.workers.tasks import run_startup_demo_scraping
         run_startup_demo_scraping.apply_async(countdown=15)
         logger.info("[Celery] Startup demo scraping programado en 15s.")
